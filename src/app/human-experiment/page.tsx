@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import ExperimentHero from "@/components/human-experiment/ExperimentHero";
+
 import PerceptionExperiment from "@/components/human-experiment/PerceptionExperiment";
 import CommitmentExperiment from "@/components/human-experiment/ChoiceExperiment";
 import SocialInfluenceExperiment from "@/components/human-experiment/SocialInfluenceExperiment";
@@ -28,6 +30,8 @@ export default function HumanExperimentPage() {
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState("");
 
+  const [showHero, setShowHero] = useState(true);
+
   const [profileComplete, setProfileComplete] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
 
@@ -35,7 +39,10 @@ export default function HumanExperimentPage() {
   const [congregation, setCongregation] = useState("");
   const [age, setAge] = useState("");
 
-  // Read participant ID and room from URL/localStorage
+  // ---------------------------------------------------------
+  // READ PARTICIPANT + ROOM
+  // ---------------------------------------------------------
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
 
@@ -50,23 +57,26 @@ export default function HumanExperimentPage() {
     if (participant) {
       window.localStorage.setItem(
         "arise-human-experiment-participant",
-        participant
+        participant.toUpperCase()
       );
     }
 
     if (room) {
       setRoomCode(room);
+      setJoined(true);
+      setShowHero(false);
 
       window.localStorage.setItem(
         "arise-human-experiment-room",
         room
       );
-
-      setJoined(true);
     }
   }, []);
 
-  // Join room
+  // ---------------------------------------------------------
+  // JOIN ROOM
+  // ---------------------------------------------------------
+
   const joinRoom = async () => {
     const code = roomCode.trim();
 
@@ -119,7 +129,10 @@ export default function HumanExperimentPage() {
       )}&participant=${encodeURIComponent(participant)}`;
   };
 
-  // Load current session
+  // ---------------------------------------------------------
+  // LIVE SESSION
+  // ---------------------------------------------------------
+
   useEffect(() => {
     if (!joined) return;
 
@@ -130,7 +143,10 @@ export default function HumanExperimentPage() {
     });
   }, [joined]);
 
-  // Save participant information
+  // ---------------------------------------------------------
+  // SAVE PARTICIPANT PROFILE
+  // ---------------------------------------------------------
+
   const saveProfile = async () => {
     if (!supabase) {
       setJoinError("Database connection unavailable.");
@@ -197,10 +213,15 @@ export default function HumanExperimentPage() {
       .eq("participant_key", participantKey);
 
     if (error) {
-      console.error("FAILED TO SAVE PARTICIPANT PROFILE:", error);
+      console.error(
+        "FAILED TO SAVE PARTICIPANT PROFILE:",
+        error
+      );
+
       setJoinError(
         "Could not save your information. Please try again."
       );
+
       setSavingProfile(false);
       return;
     }
@@ -214,11 +235,29 @@ export default function HumanExperimentPage() {
     setSavingProfile(false);
   };
 
-  // Join Room screen
+  // ---------------------------------------------------------
+  // HERO
+  // ---------------------------------------------------------
+
+  if (showHero) {
+    return (
+      <ExperimentHero
+        onEnter={() => {
+          setShowHero(false);
+        }}
+      />
+    );
+  }
+
+  // ---------------------------------------------------------
+  // ROOM CODE
+  // ---------------------------------------------------------
+
   if (!joined) {
     return (
       <main className="min-h-screen bg-[#f8f1e6] text-[#19352c] flex items-center justify-center px-6">
         <div className="w-full max-w-md">
+
           <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-[#c7542b]">
             ARISE / 2026
           </p>
@@ -232,6 +271,7 @@ export default function HumanExperimentPage() {
           </p>
 
           <div className="mt-10 border border-[#19352c]/15 bg-[#eee5d5] p-8">
+
             <label className="font-mono text-[10px] uppercase tracking-[0.2em]">
               Room Code
             </label>
@@ -244,6 +284,7 @@ export default function HumanExperimentPage() {
                     .replace(/\D/g, "")
                     .slice(0, 6)
                 );
+
                 setJoinError("");
               }}
               onKeyDown={(e) => {
@@ -270,21 +311,28 @@ export default function HumanExperimentPage() {
             >
               {joining ? "Joining..." : "Join Room"}
             </button>
+
           </div>
 
           <p className="mt-6 text-center font-mono text-[9px] uppercase tracking-[0.2em] text-[#19352c]/40">
             Scan your ID QR code before joining
           </p>
+
         </div>
       </main>
     );
   }
 
-  // Participant information screen
+  // ---------------------------------------------------------
+  // PARTICIPANT PROFILE
+  // ---------------------------------------------------------
+
   if (!profileComplete) {
     return (
       <main className="min-h-screen bg-[#f8f1e6] text-[#19352c] flex items-center justify-center px-6 py-12">
+
         <div className="w-full max-w-lg">
+
           <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-[#c7542b]">
             ARISE / 2026
           </p>
@@ -298,6 +346,7 @@ export default function HumanExperimentPage() {
           </p>
 
           <div className="mt-10 space-y-6 border border-[#19352c]/15 bg-[#eee5d5] p-8">
+
             <div>
               <label className="font-mono text-[10px] uppercase tracking-[0.2em]">
                 Name
@@ -343,6 +392,7 @@ export default function HumanExperimentPage() {
                       .replace(/\D/g, "")
                       .slice(0, 3)
                   );
+
                   setJoinError("");
                 }}
                 inputMode="numeric"
@@ -366,13 +416,19 @@ export default function HumanExperimentPage() {
                 ? "Saving..."
                 : "Enter Experiment"}
             </button>
+
           </div>
+
         </div>
+
       </main>
     );
   }
 
-  // Current experiment controlled by facilitator
+  // ---------------------------------------------------------
+  // LIVE EXPERIMENT
+  // ---------------------------------------------------------
+
   switch (session.experiment) {
     case 1:
       return <PerceptionExperiment />;

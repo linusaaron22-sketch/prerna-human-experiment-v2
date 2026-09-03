@@ -12,7 +12,7 @@ import {
   Users,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const experiments = [
   {
@@ -23,19 +23,12 @@ const experiments = [
     status: "current",
   },
   {
-  number: "02",
-  title: "SUNK COST",
-  description: "Knowing when to walk away.",
-  icon: Target,
-  status: "locked",
-},
-  {
-  number: "02",
-  title: "COMMITMENT",
-  description: "Why we keep going.",
-  icon: Target,
-  status: "locked",
-},
+    number: "02",
+    title: "COMMITMENT",
+    description: "Why we keep going.",
+    icon: Target,
+    status: "locked",
+  },
   {
     number: "03",
     title: "SOCIAL INFLUENCE",
@@ -66,11 +59,43 @@ const experiments = [
   },
 ];
 
-export default function ExperimentHero() {
+export default function ExperimentHero({
+  onEnter,
+}: {
+  onEnter: () => void;
+}) {
   const [passStarted, setPassStarted] = useState(false);
+  const [participantId, setParticipantId] = useState("HE-001");
 
-  const participantId = "AR-001";
-  const profileUrl = `https://arise.example/human/${participantId}`;
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    const participant =
+      params.get("participant") ||
+      window.localStorage.getItem(
+        "arise-human-experiment-participant"
+      ) ||
+      "HE-001";
+
+    const normalizedParticipant = participant.toUpperCase();
+
+    setParticipantId(normalizedParticipant);
+
+    window.localStorage.setItem(
+      "arise-human-experiment-participant",
+      normalizedParticipant
+    );
+  }, []);
+
+  const profileUrl = `https://arise-human-experiment.netlify.app/human/${participantId}`;
+
+  const handleEnter = () => {
+    setPassStarted(true);
+
+    window.setTimeout(() => {
+      onEnter();
+    }, 350);
+  };
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#f8f1e6] text-[#19352c]">
@@ -109,7 +134,6 @@ export default function ExperimentHero() {
         </div>
       </header>
 
-
       {/* =====================================================
           HERO
       ====================================================== */}
@@ -132,19 +156,17 @@ export default function ExperimentHero() {
               ARISE / 2026
             </div>
 
-            {/* IMPORTANT:
-                Constrained title so desktop doesn't overflow
-            */}
+            <h2 className="mt-3 max-w-full overflow-hidden font-serif text-[clamp(2.5rem,6vw,4rem)] uppercase leading-[0.84] tracking-[-0.045em] sm:mt-5">
 
-           <h2 className="mt-3 max-w-full overflow-hidden font-serif text-[clamp(2.5rem,6vw,4rem)] uppercase leading-[0.84] tracking-[-0.045em] sm:mt-5">
+              <span className="block">
+                HUMAN
+              </span>
 
-         <span className="block">
-          HUMAN
-         </span>
-         <span className="block text-[clamp(2.1rem,5.2vw,3.5rem)] text-[#c7542b] sm:text-[clamp(2.4rem,5vw,3.5rem)]">
-         EXPERIMENT
-        </span>
-        </h2>
+              <span className="block text-[clamp(2.1rem,5.2vw,3.5rem)] text-[#c7542b] sm:text-[clamp(2.4rem,5vw,3.5rem)]">
+                EXPERIMENT
+              </span>
+
+            </h2>
 
             <div className="mt-8 max-w-[650px] sm:mt-10">
 
@@ -181,13 +203,12 @@ export default function ExperimentHero() {
 
               </div>
 
-
               {/* BUTTON */}
 
               <motion.button
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => setPassStarted(true)}
+                onClick={handleEnter}
                 className="mt-8 flex w-full max-w-[500px] items-center justify-between rounded-2xl bg-[#19352c] px-5 py-4 text-left text-[#f8f1e6] sm:mt-10 sm:px-7 sm:py-6"
               >
 
@@ -202,8 +223,8 @@ export default function ExperimentHero() {
               </motion.button>
 
             </div>
-          </motion.div>
 
+          </motion.div>
 
           {/* =================================================
               PARTICIPANT CARD
@@ -257,7 +278,6 @@ export default function ExperimentHero() {
 
               </div>
 
-
               {/* CARD TITLE */}
 
               <div className="py-5 sm:py-7">
@@ -265,16 +285,19 @@ export default function ExperimentHero() {
                 <div className="font-mono text-[7px] uppercase tracking-[0.3em] text-[#c7542b] sm:text-[8px]">
                   ARISE / 2026
                 </div>
-              <h2 className="mt-4 w-full max-w-full overflow-hidden font-serif text-[clamp(2rem,4vw,3.5rem)] leading-[0.86] tracking-[-0.055em]">
-              HUMAN
-             <br />
-          <span className="block max-w-full text-[#c7542b]">
-            EXPERIMENT
-          </span>
-          </h2>
+
+                <h2 className="mt-4 w-full max-w-full overflow-hidden font-serif text-[clamp(2rem,4vw,3.5rem)] leading-[0.86] tracking-[-0.055em]">
+
+                  HUMAN
+                  <br />
+
+                  <span className="block max-w-full text-[#c7542b]">
+                    EXPERIMENT
+                  </span>
+
+                </h2>
 
               </div>
-
 
               {/* PARTICIPANT INFO */}
 
@@ -305,7 +328,6 @@ export default function ExperimentHero() {
                 </div>
 
               </div>
-
 
               {/* QR AREA */}
 
@@ -338,7 +360,6 @@ export default function ExperimentHero() {
 
               </div>
 
-
               {/* CARD FOOTER */}
 
               <div className="mt-4 flex items-center justify-between sm:mt-6">
@@ -359,7 +380,6 @@ export default function ExperimentHero() {
 
         </div>
       </section>
-
 
       {/* =====================================================
           EXPERIMENTS
@@ -447,13 +467,11 @@ export default function ExperimentHero() {
 
               </motion.div>
             );
-
           })}
 
         </div>
 
       </section>
-
 
       {/* =====================================================
           FOOTER
