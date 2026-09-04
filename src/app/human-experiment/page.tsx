@@ -19,7 +19,6 @@ import {
 import {
   getExperimentSession,
   subscribeToExperimentSession,
-  type ExperimentSession,
 } from "@/lib/human-experiment/supabaseSession";
 
 import { supabase } from "@/lib/supabase";
@@ -47,35 +46,37 @@ export default function HumanExperimentPage() {
   // READ PARTICIPANT + ROOM
   // ---------------------------------------------------------
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
 
-    const room = params.get("room");
+  const room =
+    params.get("room") ||
+    window.localStorage.getItem("arise-human-experiment-room");
 
-    const participant =
-      params.get("participant") ||
-      window.localStorage.getItem(
-        "arise-human-experiment-participant"
-      );
+  const participant =
+    params.get("participant") ||
+    window.localStorage.getItem(
+      "arise-human-experiment-participant"
+    );
 
-    if (participant) {
-      window.localStorage.setItem(
-        "arise-human-experiment-participant",
-        participant.toUpperCase()
-      );
-    }
+  if (participant) {
+    window.localStorage.setItem(
+      "arise-human-experiment-participant",
+      participant.toUpperCase()
+    );
+  }
 
-    if (room) {
-      setRoomCode(room);
-      setJoined(true);
-      setShowHero(false);
+  if (room) {
+    setRoomCode(room);
+    setJoined(true);
+    setShowHero(false);
 
-      window.localStorage.setItem(
-        "arise-human-experiment-room",
-        room
-      );
-    }
-  }, []);
+    window.localStorage.setItem(
+      "arise-human-experiment-room",
+      room
+    );
+  }
+}, []);
 
   // ---------------------------------------------------------
   // JOIN ROOM
