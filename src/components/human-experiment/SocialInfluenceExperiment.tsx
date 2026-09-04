@@ -129,6 +129,7 @@ const [secondChoice, setSecondChoice] = useState<string | null>(null);
 
 useEffect(() => {
   let cancelled = false;
+  let interval: ReturnType<typeof setInterval> | null = null;
 
   async function loadParticipantGroup() {
     if (!session.sessionId) return;
@@ -139,24 +140,24 @@ useEffect(() => {
 
     if (!participantKey) return;
 
-   if (!supabase) {
-  console.error("Supabase client is not available.");
-  return;
-}
+    if (!supabase) {
+      console.error("Supabase client is not available.");
+      return;
+    }
 
-const { data, error } = await supabase
-  .from("experiment_participants")
-  .select("group_name, is_representative")
-  .eq("session_id", session.sessionId)
-  .eq("participant_key", participantKey)
-  .maybeSingle();
+    const { data, error } = await supabase
+      .from("experiment_participants")
+      .select("group_name, is_representative")
+      .eq("session_id", session.sessionId)
+      .eq("participant_key", participantKey)
+      .maybeSingle();
+
+    if (cancelled) return;
 
     if (error) {
       console.error("Failed to load participant group:", error);
       return;
     }
-
-    if (cancelled) return;
 
     const groupMap: Record<string, GroupId> = {
       women: "women",
@@ -168,20 +169,53 @@ const { data, error } = await supabase
     const group = data?.group_name
       ? groupMap[data.group_name.toLowerCase()]
       : undefined;
-if (group) {
-  setActiveGroup(group);
-}
 
-setIsRepresentative(Boolean(data?.is_representative));
-setGroupLoaded(true);
-}
+    if (group) {
+      setActiveGroup(group);
+      setIsRepresentative(Boolean(data?.is_representative));
+      setGroupLoaded(true);
 
-void loadParticipantGroup();
+      // Group has been assigned. No need to keep checking.
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    }
+  }
 
-return () => {
-  cancelled = true;
-};
+  // Check immediately.
+  void loadParticipantGroup();
 
+  // Keep checking until facilitator assigns the group.
+  interval = setInterval(() => {
+    void loadParticipantGroup();
+  }, 1000);
+
+  return () => {
+    cancelled = true;
+
+    if (interval) {
+      clearInterval(interval);
+    }
+  };
+}, [session.sessionId]);
+
+
+/*
+ * FACILITATOR STAGE SYNC
+ *
+ * The facilitator controls:
+ * INTRO → START → WAIT → REVEAL → DISCUSSION → COMPLETE
+ *
+ * Participants handle the actual decision screens locally.
+ */
+useEffect(() => {
+  if (session.experiment !== 3) return;
+
+  if (session.stage === "INTRO") {
+    setStage("intro");
+    return;
+  }
 
   if (session.stage === "START" || session.stage === "QUESTION") {
     if (firstChoice === null) {
@@ -224,8 +258,9 @@ return () => {
 }, [
   session.experiment,
   session.stage,
+  firstChoice,
+  secondChoice,
 ]);
-
   const activeGroupName =
     groups.find((group) => group.id === activeGroup)?.name ?? "";
 
