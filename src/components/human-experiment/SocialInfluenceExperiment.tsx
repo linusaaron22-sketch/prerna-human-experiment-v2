@@ -126,24 +126,18 @@ const [secondChoice, setSecondChoice] = useState<string | null>(null);
         "arise-human-experiment-participant"
       ) || ""
     : "";
-
 useEffect(() => {
   let cancelled = false;
   let interval: ReturnType<typeof setInterval> | null = null;
 
-  async function loadParticipantGroup() {
-    if (!session.sessionId) return;
+  async function loadParticipantAssignment() {
+    if (!session.sessionId || !supabase) return;
 
     const participantKey = window.localStorage.getItem(
       "arise-human-experiment-participant"
     );
 
     if (!participantKey) return;
-
-    if (!supabase) {
-      console.error("Supabase client is not available.");
-      return;
-    }
 
     const { data, error } = await supabase
       .from("experiment_participants")
@@ -155,7 +149,10 @@ useEffect(() => {
     if (cancelled) return;
 
     if (error) {
-      console.error("Failed to load participant group:", error);
+      console.error(
+        "FAILED TO LOAD SOCIAL INFLUENCE ASSIGNMENT:",
+        error
+      );
       return;
     }
 
@@ -172,23 +169,23 @@ useEffect(() => {
 
     if (group) {
       setActiveGroup(group);
-      setIsRepresentative(Boolean(data?.is_representative));
       setGroupLoaded(true);
-
-      // Group has been assigned. No need to keep checking.
-      if (interval) {
-        clearInterval(interval);
-        interval = null;
-      }
+    } else {
+      setGroupLoaded(false);
     }
+
+    // IMPORTANT:
+    // Keep this updated because Admin may make/remove
+    // a participant as representative after assigning groups.
+    setIsRepresentative(Boolean(data?.is_representative));
   }
 
-  // Check immediately.
-  void loadParticipantGroup();
+  // Load immediately.
+  void loadParticipantAssignment();
 
-  // Keep checking until facilitator assigns the group.
+  // Keep assignment + representative status synced.
   interval = setInterval(() => {
-    void loadParticipantGroup();
+    void loadParticipantAssignment();
   }, 1000);
 
   return () => {
@@ -200,9 +197,8 @@ useEffect(() => {
   };
 }, [session.sessionId]);
 
-
 /*
- * FACILITATOR STAGE SYNC
+ * FACILITATOR STAGE SYNC 
  *
  * The facilitator controls:
  * INTRO → START → WAIT → REVEAL → DISCUSSION → COMPLETE
@@ -212,48 +208,54 @@ useEffect(() => {
 useEffect(() => {
   if (session.experiment !== 3) return;
 
-  if (session.stage === "INTRO") {
-    setStage("intro");
-    return;
-  }
+  switch (session.stage) {
+    case "INTRO":
+      setStage("intro");
+      break;
 
-  if (session.stage === "START" || session.stage === "QUESTION") {
-    if (firstChoice === null) {
-      setStage("round-one");
-    } else if (secondChoice === null) {
-      setStage("round-two");
-    }
+    case "START":
+    case "QUESTION":
+      if (firstChoice === null) {
+        // First question
+        setStage("round-one");
+      } else if (secondChoice === null) {
+        // Second question
+        setStage("round-two");
+      }
+      break;
 
-    return;
-  }
+    case "WAIT":
+      if (firstChoice !== null && secondChoice === null) {
+        // Waiting after Question 1
+        setStage("waiting-one");
+      } else if (secondChoice !== null) {
+        // Waiting after Question 2
+        setStage("waiting-two");
+      }
+      break;
 
-  if (session.stage === "WAIT") {
-    if (firstChoice !== null && secondChoice === null) {
-      setStage("waiting-two");
-    } else {
-      setStage("waiting-one");
-    }
+    case "REVEAL":
+      if (secondChoice === null) {
+        // First reveal:
+        // show what the other groups chose
+        setStage("reveal");
+      } else {
+        // Final reveal:
+        // show whether the group moved
+        setStage("final");
+      }
+      break;
 
-    return;
-  }
+    case "DISCUSSION":
+      setStage("real-life");
+      break;
 
-  if (session.stage === "REVEAL") {
-    if (secondChoice !== null) {
-      setStage("final");
-    } else {
-      setStage("reveal");
-    }
+    case "COMPLETE":
+      setStage("takeaway");
+      break;
 
-    return;
-  }
-
-  if (session.stage === "DISCUSSION") {
-    setStage("real-life");
-    return;
-  }
-
-  if (session.stage === "COMPLETE") {
-    setStage("takeaway");
+    default:
+      break;
   }
 }, [
   session.experiment,
