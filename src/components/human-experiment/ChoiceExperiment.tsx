@@ -24,57 +24,59 @@ const [timeLeft, setTimeLeft] = useState(20);
 
 const session = useHumanExperimentSession();
 
-  // 20-second timer for both decisions
+  // Facilitator controls progression. The timer is only visual; it never
+  // advances the experiment by itself.
   useEffect(() => {
     if (stage !== "decision-one" && stage !== "decision-two") return;
 
     setTimeLeft(20);
 
     const timer = setInterval(() => {
-      setTimeLeft((current) => {
-        if (current <= 1) {
-          clearInterval(timer);
-
-          if (stage === "decision-one") {
-            setStage("wait-one");
-          } else {
-            setStage("wait-two");
-          }
-
-          return 0;
-        }
-
-        return current - 1;
-      });
+      setTimeLeft((current) => (current <= 1 ? 0 : current - 1));
     }, 1000);
 
     return () => clearInterval(timer);
   }, [stage]);
 
-    // Facilitator-controlled final stages.
-  // The two decision questions remain locally controlled.
-  // Facilitator-controlled final stages.
-// The two decision questions remain locally controlled.
-useEffect(() => {
-  if (session.experiment !== 2) return;
+  // The facilitator controls every live stage from the admin panel.
+  useEffect(() => {
+    if (session.experiment !== 2) return;
 
-  if (session.stage === "REVEAL") {
-    setStage("reveal");
-  } else if (session.stage === "DISCUSSION") {
-    setStage("real-world");
-  } else if (session.stage === "COMPLETE") {
-    setStage("complete");
-  }
-}, [session.experiment, session.stage]);
+    switch (String(session.stage)) {
+      case "INTRO":
+      case "START":
+        setStage("intro");
+        break;
+      case "QUESTION_1":
+        setStage("decision-one");
+        break;
+      case "WAIT_1":
+        setStage("wait-one");
+        break;
+      case "QUESTION_2":
+        setStage("decision-two");
+        break;
+      case "WAIT_2":
+        setStage("wait-two");
+        break;
+      case "REVEAL":
+        setStage("reveal");
+        break;
+      case "DISCUSSION":
+        setStage("real-world");
+        break;
+      case "COMPLETE":
+        setStage("complete");
+        break;
+    }
+  }, [session.experiment, session.stage]);
 
   const chooseFirstAnswer = (value: "STAY" | "LEAVE") => {
     setFirstAnswer(value);
-    setStage("wait-one");
   };
 
   const chooseSecondAnswer = (value: "STAY" | "LEAVE") => {
     setSecondAnswer(value);
-    setStage("wait-two");
   };
 
   return (
@@ -354,13 +356,9 @@ useEffect(() => {
                     Listen for the facilitator's instruction before continuing.
                   </p>
 
-                  <button
-                    onClick={() => setStage("decision-two")}
-                    className="mt-7 flex items-center gap-4 bg-[#19352c] px-7 py-4 font-mono text-[9px] font-semibold uppercase tracking-[0.25em] text-[#f8f1e6] transition-colors hover:bg-[#19352c]/90"
-                  >
-                    Continue to Decision 02
-                    <ArrowRight className="h-4 w-4" strokeWidth={1.5} />
-                  </button>
+                  <div className="mt-7 border border-[#19352c]/10 bg-[#eee5d5]/40 px-5 py-4 font-mono text-[8px] font-semibold uppercase tracking-[0.18em] text-[#19352c]/45">
+                    Wait for the facilitator to continue.
+                  </div>
 
                 </div>
               </motion.div>
