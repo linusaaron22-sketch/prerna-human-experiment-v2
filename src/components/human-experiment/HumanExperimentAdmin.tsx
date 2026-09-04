@@ -1118,19 +1118,13 @@ return (
                       {stage === "START" &&
                         "Get everyone ready."}
 
-                      {(stage === "QUESTION" || stage === "QUESTION_1") &&
+                      {(stage === "QUESTION" || stage === "QUESTION_1" || stage === "QUESTION_2") &&
                         "Participants are answering."}
 
-                      {(stage === "WAIT" || stage === "WAIT_1") &&
+                      {(stage === "WAIT" || stage === "WAIT_1" || stage === "WAIT_2") &&
                         "Wait for the room."}
 
-                      {stage === "QUESTION_2" &&
-                        "Participants are answering Decision 02."}
-
-                      {stage === "WAIT_2" &&
-                        "Wait for the second decision."}
-
-                      {String(stage).startsWith("REVEAL") &&
+                      {(stage === "REVEAL" || stage === "REVEAL_1" || stage === "REVEAL_2") &&
                         "Reveal what actually happened."}
 
                       {stage === "DISCUSSION" &&
@@ -1277,6 +1271,78 @@ return (
             </div>
 
             {/* =================================================
+                SOCIAL INFLUENCE GROUP ASSIGNMENT
+            ================================================== */}
+
+            {experiment.id === 3 && (
+              <div className="mt-7 border border-[#19352c]/10">
+                <div className="border-b border-[#19352c]/10 px-5 py-4">
+                  <SectionLabel>Group Assignment</SectionLabel>
+                  <p className="mt-1 font-mono text-[8px] text-[#19352c]/40">
+                    Assign each participant to a group and choose exactly one representative per group.
+                  </p>
+                </div>
+
+                <div className="divide-y divide-[#19352c]/10">
+                  {participants.map((participant) => (
+                    <div key={participant.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-mono text-[10px] font-bold">{participant.name}</p>
+                        <p className="mt-1 font-mono text-[7px] uppercase tracking-[0.12em] text-[#19352c]/40">
+                          {participant.group || "No group assigned"}{participant.isRepresentative ? " · REPRESENTATIVE" : ""}
+                        </p>
+                      </div>
+                      <select
+                        value={participant.group || ""}
+                        onChange={async (event) => {
+                          if (!supabaseSession) return;
+                          const { supabase } = await import("@/lib/supabase");
+                          if (!supabase) return;
+                          const group = event.target.value || null;
+                          const updated = await supabase
+                            .from("experiment_participants")
+                            .update({ group_name: group, is_representative: false })
+                            .eq("id", participant.id)
+                            .eq("session_id", supabaseSession.id);
+                          if (updated.error) console.error("Failed to assign group:", updated.error);
+                        }}
+                        className="border border-[#19352c]/15 bg-[#f8f1e6] px-3 py-2 font-mono text-[8px] uppercase"
+                      >
+                        <option value="">No group</option>
+                        <option value="Women of the Bible">Women of the Bible</option>
+                        <option value="Old Testament Leaders">Old Testament Leaders</option>
+                        <option value="New Testament Important Members">New Testament Important Members</option>
+                        <option value="The 12 Disciples">The 12 Disciples</option>
+                      </select>
+                      <button
+                        onClick={async () => {
+                          if (!supabaseSession || !participant.group) return;
+                          const { supabase } = await import("@/lib/supabase");
+                          if (!supabase) return;
+                          const { error: clearError } = await supabase
+                            .from("experiment_participants")
+                            .update({ is_representative: false })
+                            .eq("session_id", supabaseSession.id)
+                            .eq("group_name", participant.group);
+                          if (clearError) { console.error("Failed to clear group representative:", clearError); return; }
+                          const { error } = await supabase
+                            .from("experiment_participants")
+                            .update({ is_representative: true })
+                            .eq("id", participant.id)
+                            .eq("session_id", supabaseSession.id);
+                          if (error) console.error("Failed to set representative:", error);
+                        }}
+                        className={`border px-3 py-2 font-mono text-[8px] font-bold uppercase ${participant.isRepresentative ? "border-[#19352c] bg-[#19352c] text-[#f8f1e6]" : "border-[#19352c]/15"}`}
+                      >
+                        {participant.isRepresentative ? "Representative ✓" : "Make Representative"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* =================================================
                 SOCIAL INFLUENCE GROUP CONTROL
             ================================================== */}
 
@@ -1298,7 +1364,14 @@ return (
 
                 <div className="grid sm:grid-cols-2">
                   {GROUPS.map((group, index) => {
-                    const submitted = group.submitted === group.total;
+                    const members = participants.filter((p) => p.group === group.name);
+                    const representatives = members.filter((p) => p.isRepresentative);
+                    const submitted = representatives.some((p) => {
+                      const answer = p.answer;
+                      return Boolean(answer && typeof answer === "object" && (answer as any).round1);
+                    });
+                    const submittedCount = submitted ? 1 : 0;
+                    const totalCount = members.length;
 
                     return (
                       <div
@@ -1317,7 +1390,7 @@ return (
                               </p>
 
                               <p className="mt-2 font-mono text-[8px] uppercase tracking-[0.12em] text-[#19352c]/40">
-                                {group.submitted} / {group.total} submitted
+                                {submittedCount} / 1 representative submitted
                               </p>
                             </div>
                           </div>
@@ -1334,7 +1407,7 @@ return (
                             className="h-full bg-[#c7542b]"
                             style={{
                               width: `${
-                                (group.submitted / group.total) * 100
+                                submittedCount * 100
                               }%`,
                             }}
                           />

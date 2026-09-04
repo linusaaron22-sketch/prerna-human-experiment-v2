@@ -1,4 +1,4 @@
-"se client";
+"use client";
 
 import { useEffect, useState } from "react";
 
@@ -104,18 +104,19 @@ const characters: Character[] = [
   },
 ];
 
+
+
 export default function SocialInfluenceExperiment() {
  const session = useHumanExperimentSession();
 
 const [stage, setStage] = useState<Stage>("intro");
 const [activeGroup, setActiveGroup] = useState<GroupId | null>(null);
 const [groupLoaded, setGroupLoaded] = useState(false);
-const [isRepresentative, setIsRepresentative] = useState(false);
-const [firstRevealSeen, setFirstRevealSeen] = useState(false);
-const [groupChoices, setGroupChoices] = useState<Partial<Record<GroupId, string>>>({});
 
 const [firstChoice, setFirstChoice] = useState<string | null>(null);
 const [secondChoice, setSecondChoice] = useState<string | null>(null);
+const [isRepresentative, setIsRepresentative] = useState(false);
+const [groupChoices, setGroupChoices] = useState<Record<GroupId, string>>({} as Record<GroupId, string>);
   const participantKey =
   typeof window !== "undefined"
     ? window.localStorage.getItem(
@@ -154,34 +155,26 @@ const { data, error } = await supabase
 
     if (cancelled) return;
 
-    const groupMap: Record<string, GroupId> = {
-      women: "women",
-      ot: "ot",
-      nt: "nt",
-      disciples: "disciples",
-    };
-
-    const group = data?.group_name
-      ? groupMap[data.group_name.toLowerCase()]
-      : undefined;
+    const rawGroup = String(data?.group_name ?? "").trim().toLowerCase();
+    const group: GroupId | undefined =
+      rawGroup === "women" || rawGroup === "women of the bible"
+        ? "women"
+        : rawGroup === "ot" || rawGroup === "old testament leaders"
+          ? "ot"
+          : rawGroup === "nt" || rawGroup === "new testament important members"
+            ? "nt"
+            : rawGroup === "disciples" || rawGroup === "the 12 disciples"
+              ? "disciples"
+              : undefined;
 
     if (group) {
       setActiveGroup(group);
     }
 
     setIsRepresentative(Boolean(data?.is_representative));
-
-    const savedAnswer =
-      data?.answer &&
-      typeof data.answer === "object" &&
-      !Array.isArray(data.answer)
-        ? data.answer as Record<string, unknown>
-        : {};
-
-    if (typeof savedAnswer.round1 === "string") setFirstChoice(savedAnswer.round1);
-    if (typeof savedAnswer.round2 === "string") setSecondChoice(savedAnswer.round2);
-    setFirstRevealSeen(savedAnswer.round1Revealed === true);
-
+    // Do not restore old round choices into the active UI. The facilitator
+    // controls the current round through the server stage, and a new run
+    // must not open on a previous participant's answer.
     setGroupLoaded(true);
   }
 
@@ -193,94 +186,72 @@ const { data, error } = await supabase
 }, [session.sessionId]);
 
   useEffect(() => {
-  if (session.experiment !== 3) return;
+    if (session.experiment !== 3) return;
 
-  switch (String(session.stage)) {
-    case "INTRO":
-      setStage("intro");
-      break;
-
-    case "START":
-    case "QUESTION_1":
-      if (firstChoice === null) setStage("round-one");
-      else setStage("waiting-one");
-      break;
-
-    case "WAIT_1":
-      setStage("waiting-one");
-      break;
-
-    case "REVEAL_1":
-      setFirstRevealSeen(true);
-      setStage("reveal");
-      break;
-
-    case "QUESTION_2":
-      setFirstRevealSeen(true);
-      if (secondChoice === null) setStage("round-two");
-      else setStage("waiting-two");
-      break;
-
-    case "WAIT_2":
-      setStage("waiting-two");
-      break;
-
-    case "REVEAL_2":
-      setStage("final");
-      break;
-
-    case "DISCUSSION":
-      setStage("real-life");
-      break;
-
-    case "COMPLETE":
-      setStage("takeaway");
-      break;
-
-    default:
-      break;
-  }
-}, [session.experiment, session.stage, firstChoice, secondChoice]);
+    // The server stage is the single source of truth. Never infer the
+    // current round from a previously saved answer.
+    switch (String(session.stage)) {
+      case "INTRO":
+      case "START":
+        setStage("intro");
+        break;
+      case "QUESTION_1":
+        setStage("round-one");
+        break;
+      case "WAIT_1":
+        setStage("waiting-one");
+        break;
+      case "REVEAL_1":
+        setStage("reveal");
+        break;
+      case "QUESTION_2":
+        setStage("round-two");
+        break;
+      case "WAIT_2":
+        setStage("waiting-two");
+        break;
+      case "REVEAL_2":
+        setStage("final");
+        break;
+      case "DISCUSSION":
+        setStage("real-life");
+        break;
+      case "COMPLETE":
+        setStage("takeaway");
+        break;
+    }
+  }, [session.experiment, session.stage]);
 
   useEffect(() => {
-    if (!supabase || !session.sessionId || session.experiment !== 3) return;
-    if (String(session.stage) !== "REVEAL_1") return;
     const client = supabase;
+    if (!client || !session.sessionId || session.experiment !== 3 || String(session.stage) !== "REVEAL_1") return;
     let cancelled = false;
-
-    const loadRoundOneChoices = async () => {
+    const loadChoices = async () => {
       const { data, error } = await client
         .from("experiment_participants")
         .select("group_name, answer")
         .eq("session_id", session.sessionId);
-
-      if (error) {
-        console.error("FAILED TO LOAD SOCIAL INFLUENCE GROUP CHOICES:", error);
-        return;
+      if (error) { console.error("FAILED TO LOAD SOCIAL REVEAL:", error); return; }
+      if (cancelled) return;
+      const map: Record<GroupId, string> = {} as Record<GroupId, string>;
+      for (const row of data || []) {
+        const key = typeof row.group_name === "string" ? row.group_name.toLowerCase() : "";
+        const id = key.includes("women") ? "women" : key.includes("old testament") ? "ot" : key.includes("new testament") ? "nt" : key.includes("12 disciples") ? "disciples" : null;
+        const answer = row.answer && typeof row.answer === "object" && !Array.isArray(row.answer) ? row.answer as Record<string, unknown> : {};
+        if (id && typeof answer.round1 === "string") map[id] = answer.round1;
       }
-
-      const groupMap: Record<string, GroupId> = {
-        women: "women", ot: "ot", nt: "nt", disciples: "disciples",
-      };
-      const choices: Partial<Record<GroupId, string>> = {};
-      for (const row of data ?? []) {
-        const group = row.group_name ? groupMap[String(row.group_name).toLowerCase()] : undefined;
-        const answer = row.answer && typeof row.answer === "object" && !Array.isArray(row.answer)
-          ? row.answer as Record<string, unknown> : {};
-        if (group && typeof answer.round1 === "string") choices[group] = answer.round1;
-      }
-      if (!cancelled) setGroupChoices(choices);
+      setGroupChoices(map);
     };
-
-    void loadRoundOneChoices();
-    const interval = window.setInterval(loadRoundOneChoices, 1000);
+    void loadChoices();
+    const interval = window.setInterval(loadChoices, 1000);
     return () => { cancelled = true; window.clearInterval(interval); };
-  }, [session.experiment, session.stage, session.sessionId]);
+  }, [session.sessionId, session.experiment, session.stage]);
 
   const activeGroupName =
     groups.find((group) => group.id === activeGroup)?.name ?? "";
 
   const otherGroups = groups.filter((group) => group.id !== activeGroup);
+  const canSubmit = Boolean(activeGroup && isRepresentative && groupLoaded);
 const submitAnswer = async (value: {
   round: 1 | 2;
   choice: string;
@@ -288,6 +259,7 @@ const submitAnswer = async (value: {
   if (!supabase) return;
   if (!session.sessionId) return;
   if (!participantKey) return;
+  if (!isRepresentative || !activeGroup) return;
 
   // Get the participant's existing answer so Round 02
   // does not overwrite Round 01.
@@ -348,29 +320,17 @@ const submitAnswer = async (value: {
   );
 };
       
-const chooseRoundOne = (name: string) => {
-  if (!isRepresentative) return;
-  if (String(session.stage) !== "QUESTION_1" && String(session.stage) !== "START") return;
+const chooseRoundOne = async (name: string) => {
+  if (!canSubmit || String(session.stage) !== "QUESTION_1") return;
   setFirstChoice(name);
-
-  void submitAnswer({
-    round: 1,
-    choice: name,
-  });
-
+  await submitAnswer({ round: 1, choice: name });
   setStage("waiting-one");
 };
 
-const chooseRoundTwo = (name: string) => {
-  if (!isRepresentative || !firstRevealSeen) return;
-  if (String(session.stage) !== "QUESTION_2") return;
+const chooseRoundTwo = async (name: string) => {
+  if (!canSubmit || String(session.stage) !== "QUESTION_2") return;
   setSecondChoice(name);
-
-  void submitAnswer({
-    round: 2,
-    choice: name,
-  });
-
+  await submitAnswer({ round: 2, choice: name });
   setStage("waiting-two");
 };
   
@@ -445,7 +405,7 @@ const chooseRoundTwo = (name: string) => {
                     </h2>
 
                     <p className="font-mono text-[7px] uppercase tracking-[0.18em] text-[#19352c]/40">
-                      Assigned during the icebreaker
+                      {isRepresentative ? "GROUP REPRESENTATIVE · YOU SUBMIT" : "GROUP MEMBER · WAIT FOR YOUR REPRESENTATIVE"}
                     </p>
                   </div>
                 </div>
@@ -522,7 +482,7 @@ const chooseRoundTwo = (name: string) => {
   animate={{ opacity: 1, y: 0 }}
   transition={{ delay: index * 0.04 }}
   onClick={() => chooseRoundOne(character.name)}
-  disabled={!isRepresentative}
+                      disabled={!canSubmit}
   className="group overflow-hidden border border-[#19352c]/12 bg-[#eee5d5]/35 text-left transition-all hover:-translate-y-1 hover:border-[#c7542b]/45 hover:bg-[#f8f1e6]"
 >
   <div className="overflow-hidden bg-[#e7ddcc]">
@@ -723,7 +683,7 @@ const chooseRoundTwo = (name: string) => {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.04 }}
                       onClick={() => chooseRoundTwo(character.name)}
-                      disabled={!isRepresentative || !firstRevealSeen}
+                      disabled={!canSubmit}
                       className={`group overflow-hidden border text-left transition-all hover:-translate-y-1 ${
                         character.name === firstChoice
                           ? "border-[#c7542b]/35 bg-[#f3eadb]"
