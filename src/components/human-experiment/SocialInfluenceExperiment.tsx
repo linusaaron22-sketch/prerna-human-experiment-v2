@@ -408,6 +408,26 @@ return (
                     choose one biblical character. Your decision will be kept
                     private until the facilitator reveals the other groups'
                     choices.
+                    <button
+  onClick={() => {
+    if (!groupLoaded) return;
+
+    if (!activeGroup) {
+      alert("Please wait for the facilitator to assign your group.");
+      return;
+    }
+
+    setStage("round-one");
+  }}
+  disabled={!groupLoaded || !activeGroup}
+  className="mt-8 rounded-xl bg-white px-8 py-4 font-semibold text-black shadow-lg transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
+>
+  {groupLoaded
+    ? activeGroup
+      ? "Continue"
+      : "Waiting for Group Assignment..."
+    : "Loading..."}
+</button>
                   </p>
                 </div>
               </motion.div>
