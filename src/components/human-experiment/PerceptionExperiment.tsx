@@ -99,22 +99,30 @@ useEffect(() => {
     void registerParticipant();
   }, [session.sessionId]);
     
-   const updateParticipantStage = async (nextStage: string) => {
+  const submitParticipantAnswer = async (
+  value: "A" | "B" | "SAME"
+) => {
   if (!supabase) return;
   if (!session.sessionId) return;
 
-  const participantKey =
-    window.localStorage.getItem("arise-human-experiment-participant") ||
-    new URLSearchParams(window.location.search).get("participant") ||
-    "AR-001";
-
-  await supabase
+  const { error } = await supabase
     .from("experiment_participants")
     .update({
-  current_experiment: 1,
-})
+      answer: value,
+      status: "ANSWERED",
+      submitted_at: new Date().toISOString(),
+      connected: true,
+      current_experiment: 1,
+    })
     .eq("session_id", session.sessionId)
     .eq("participant_key", participantKey);
+
+  if (error) {
+    console.error("FAILED TO SUBMIT ANSWER:", error);
+    return;
+  }
+
+  console.log("ANSWER SUBMITTED:", participantKey, value);
 };
       useEffect(() => {
     if (session.experiment !== 1) return;
@@ -173,18 +181,19 @@ if (nextStage) {
 
 const chooseAnswer = (value: "A" | "B" | "SAME") => {
   if (isLocked) return;
+  if (hasAnswered) return;
 
   setAnswer(value);
   setHasAnswered(true);
 
+  void submitParticipantAnswer(value);
+
   if (value === "SAME") {
     setStage("same-bonus");
-    void updateParticipantStage("GOOD_EYE");
     return;
   }
 
   setStage("wait");
-  void updateParticipantStage("WAIT");
 };
 
 return (
@@ -263,7 +272,6 @@ return (
   if (isLocked) return;
 
   setStage("question");
-  void updateParticipantStage("QUESTION");
 }}
                   className="mt-10 rounded-full bg-[#19352c] px-8 py-4 font-mono text-[10px] font-bold uppercase tracking-[0.25em] text-[#f8f1e6] transition-transform hover:scale-[1.02]"
                 >
@@ -605,7 +613,6 @@ return (
   if (isLocked) return;
 
   setStage("wait");
-  void updateParticipantStage("WAIT");
 }}
       className="mt-8 flex items-center gap-5 border border-[#19352c]/20 bg-[#19352c] px-7 py-4 font-mono text-[9px] font-semibold uppercase tracking-[0.25em] text-[#f8f1e6] transition-colors hover:bg-[#19352c]/90"
     >

@@ -13,13 +13,16 @@ import ReflectionExperiment from "@/components/human-experiment/ReflectionExperi
 
 import {
   DEFAULT_SESSION,
-  getSession,
-  subscribeToSession,
   type HumanExperimentSession,
 } from "@/lib/human-experiment/session";
 
-import { getExperimentSession } from "@/lib/human-experiment/supabaseSession";
+import {
+  getExperimentSession,
+  subscribeToExperimentSession,
+} from "@/lib/human-experiment/supabaseSession";
+
 import { supabase } from "@/lib/supabase";
+
 
 export default function HumanExperimentPage() {
   const [session, setSession] =
@@ -132,17 +135,64 @@ export default function HumanExperimentPage() {
   // ---------------------------------------------------------
   // LIVE SESSION
   // ---------------------------------------------------------
+useEffect(() => {
+  if (!joined) return;
 
-  useEffect(() => {
-    if (!joined) return;
+  const savedRoomCode = window.localStorage.getItem(
+  "arise-human-experiment-room"
+);
 
-    setSession(getSession());
+if (!savedRoomCode) return;
 
-    return subscribeToSession((nextSession) => {
-      setSession(nextSession);
+const roomCode: string = savedRoomCode;
+
+  let cancelled = false;
+  let cleanup: (() => void) | undefined;
+
+  async function loadLiveSession() {
+  const liveSession = await getExperimentSession(roomCode);
+
+    if (!liveSession || cancelled) return;
+
+    setSession({
+      experiment: liveSession.current_experiment,
+      stage: liveSession.current_stage,
+      timerStartedAt: liveSession.timer_started_at
+        ? new Date(liveSession.timer_started_at).getTime()
+        : null,
+      timerDuration: liveSession.timer_duration,
+      reveal: liveSession.reveal,
+      status: liveSession.status,
+      sessionId: liveSession.id,
+      roomCode: liveSession.room_code,
     });
-  }, [joined]);
 
+    cleanup = subscribeToExperimentSession(
+      liveSession.id,
+      (updated) => {
+        setSession({
+          experiment: updated.current_experiment,
+          stage: updated.current_stage,
+          timerStartedAt: updated.timer_started_at
+            ? new Date(updated.timer_started_at).getTime()
+            : null,
+          timerDuration: updated.timer_duration,
+          reveal: updated.reveal,
+          status: updated.status,
+          sessionId: updated.id,
+          roomCode: updated.room_code,
+        });
+      }
+    );
+  }
+
+  void loadLiveSession();
+
+  return () => {
+    cancelled = true;
+    cleanup?.();
+  };
+}, [joined]);
   // ---------------------------------------------------------
   // SAVE PARTICIPANT PROFILE
   // ---------------------------------------------------------

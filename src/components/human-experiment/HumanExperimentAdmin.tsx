@@ -475,21 +475,38 @@ setSessionState(toLocalSession(created));
   const [revealGroups, setRevealGroups] = useState(false);
   const stage = experiment.stages[stageIndex];
 
-  const answeredCount = participants.filter(
-    (participant) => participant.status === "ANSWERED"
-  ).length;
+ const connectedCount = participants.filter(
+  (participant) => participant.connected
+).length;
 
-  const waitingCount = participants.filter(
-    (participant) => participant.status === "WAITING"
-  ).length;
+const answeredCount = participants.filter(
+  (participant) => participant.status === "ANSWERED"
+).length;
 
-  const completedCount = participants.filter(
-    (participant) => participant.status === "COMPLETED"
-  ).length;
+const activeCount = participants.filter(
+  (participant) => participant.status === "ACTIVE"
+).length;
 
-  const missedCount = participants.filter(
-    (participant) => participant.status === "MISSED"
-  ).length;
+const readyCount = participants.filter(
+  (participant) => participant.status === "READY"
+).length;
+
+const waitingCount = participants.filter(
+  (participant) => participant.status === "WAITING"
+).length;
+
+const completedCount = participants.filter(
+  (participant) => participant.status === "COMPLETED"
+).length;
+
+const missedCount = participants.filter(
+  (participant) => participant.status === "MISSED"
+).length;
+
+const responseRate =
+  participants.length > 0
+    ? Math.round((answeredCount / participants.length) * 100)
+    : 0;
 
   useEffect(() => {
     if (!timerRunning) return;
@@ -644,6 +661,7 @@ setSessionState(toLocalSession(created));
 async function completeExperiment() {
   if (!supabaseSession) return;
 
+
   const updated = await updateExperimentSession(
     supabaseSession.id,
     {
@@ -661,6 +679,39 @@ async function completeExperiment() {
 
   setTimerRunning(false);
 }
+async function syncParticipantToRoom(
+  participant: Participant | null
+) {
+  if (!participant) return;
+
+  if (!supabaseSession) return;
+
+  const { supabase } = await import("@/lib/supabase");
+
+  if (!supabase) return;
+
+  const { error } = await supabase
+    .from("experiment_participants")
+    .update({
+      current_experiment: session.experiment,
+      status: "READY",
+      answer: null,
+      submitted_at: null,
+      connected: true,
+      last_seen_at: new Date().toISOString(),
+    })
+    .eq("id", participant.id);
+
+  if (error) {
+    console.error("FAILED TO SYNC PARTICIPANT:", error);
+    return;
+  }
+
+  console.log(
+    `SYNCED ${participant.participantKey} TO EXP ${session.experiment}`
+  );
+}
+
 return (
     <main className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#f8f1e6] text-[#19352c]">
       {/* =====================================================
@@ -1150,120 +1201,328 @@ return (
               </div>
             </div>
 
-            {/* =================================================
-                PARTICIPANT METRICS
-            ================================================== */}
+   {/* =================================================
+    LIVE PARTICIPANT DASHBOARD
+================================================== */}
 
-            <div className="mt-7">
-              <div className="flex items-end justify-between border-b border-[#19352c]/10 pb-4">
-                <div>
-                  <SectionLabel>Room Activity</SectionLabel>
-                  <h3 className="mt-1 font-serif text-2xl">
-                    Participants
-                  </h3>
-                </div>
+  <div className="mt-7">
+  <div className="flex flex-col gap-4 border-b border-[#19352c]/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <SectionLabel>Live Participant Intelligence</SectionLabel>
 
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  <span className="font-mono text-xs font-bold">
-                    {participants.length}
-                  </span>
-                  <span className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#19352c]/40">
-                    connected
-                  </span>
-                </div>
-              </div>
+      <h3 className="mt-1 font-serif text-2xl">
+        Room Pulse
+      </h3>
 
-              <div className="grid grid-cols-2 border-b border-[#19352c]/10 sm:grid-cols-4">
-                <div className="border-r border-[#19352c]/10 px-4 py-5">
-                  <p className="font-mono text-[8px] font-bold uppercase tracking-[0.15em] text-[#19352c]/40">
-                    Answered
-                  </p>
-                  <p className="mt-2 font-serif text-3xl">
-                    {answeredCount}
-                  </p>
-                </div>
+      <p className="mt-1 max-w-xl font-mono text-[8px] uppercase tracking-[0.12em] text-[#19352c]/40">
+        Every participant updates in real time.
+      </p>
+    </div>
 
-                <div className="border-r border-[#19352c]/10 px-4 py-5">
-                  <p className="font-mono text-[8px] font-bold uppercase tracking-[0.15em] text-[#19352c]/40">
-                    Waiting
-                  </p>
-                  <p className="mt-2 font-serif text-3xl">
-                    {waitingCount}
-                  </p>
-                </div>
+    <div className="flex items-center gap-2">
+      <span className="h-2 w-2 animate-pulse rounded-full bg-[#c7542b]" />
 
-                <div className="border-r border-[#19352c]/10 px-4 py-5">
-                  <p className="font-mono text-[8px] font-bold uppercase tracking-[0.15em] text-[#19352c]/40">
-                    Completed
-                  </p>
-                  <p className="mt-2 font-serif text-3xl">
-                    {completedCount}
-                  </p>
-                </div>
+      <span className="font-mono text-[8px] font-bold uppercase tracking-[0.16em]">
+        Live Sync
+      </span>
+    </div>
+  </div>
 
-                <div className="px-4 py-5">
-                  <p className="font-mono text-[8px] font-bold uppercase tracking-[0.15em] text-[#19352c]/40">
-                    Missed
-                  </p>
-                  <p className="mt-2 font-serif text-3xl text-[#c7542b]">
-                    {missedCount}
-                  </p>
-                </div>
-              </div>
+  {/* LIVE OVERVIEW */}
+
+  <div className="grid grid-cols-2 border-b border-[#19352c]/10 sm:grid-cols-4">
+    <div className="border-r border-[#19352c]/10 px-4 py-5">
+      <p className="font-mono text-[8px] font-bold uppercase tracking-[0.15em] text-[#19352c]/40">
+        Connected
+      </p>
+
+      <p className="mt-2 font-serif text-3xl">
+        {connectedCount}
+        <span className="ml-1 font-mono text-xs text-[#19352c]/30">
+          / {participants.length}
+        </span>
+      </p>
+    </div>
+
+    <div className="border-r border-[#19352c]/10 px-4 py-5">
+      <p className="font-mono text-[8px] font-bold uppercase tracking-[0.15em] text-[#19352c]/40">
+        Answered
+      </p>
+
+      <p className="mt-2 font-serif text-3xl">
+        {answeredCount}
+      </p>
+    </div>
+
+    <div className="border-r border-[#19352c]/10 px-4 py-5">
+      <p className="font-mono text-[8px] font-bold uppercase tracking-[0.15em] text-[#19352c]/40">
+        Active
+      </p>
+
+      <p className="mt-2 font-serif text-3xl text-[#c7542b]">
+        {activeCount}
+      </p>
+    </div>
+
+    <div className="px-4 py-5">
+      <p className="font-mono text-[8px] font-bold uppercase tracking-[0.15em] text-[#19352c]/40">
+        Response
+      </p>
+
+      <p className="mt-2 font-serif text-3xl">
+        {responseRate}
+        <span className="font-mono text-sm">%</span>
+      </p>
+    </div>
+  </div>
+
+  {/* RESPONSE BAR */}
+
+  <div className="border-b border-[#19352c]/10 bg-[#eee5d5] px-5 py-5">
+    <div className="flex items-center justify-between">
+      <p className="font-mono text-[8px] font-bold uppercase tracking-[0.15em] text-[#19352c]/45">
+        Room Response
+      </p>
+
+      <p className="font-mono text-[9px] font-bold">
+        {answeredCount} / {participants.length}
+      </p>
+    </div>
+
+    <div className="mt-3 h-2 overflow-hidden bg-[#19352c]/10">
+      <div
+        className="h-full bg-[#c7542b] transition-all duration-500"
+        style={{ width: `${responseRate}%` }}
+      />
+    </div>
+
+    <div className="mt-3 flex items-center gap-4">
+      <span className="font-mono text-[7px] uppercase tracking-[0.12em] text-[#19352c]/40">
+        Ready {readyCount}
+      </span>
+
+      <span className="font-mono text-[7px] uppercase tracking-[0.12em] text-[#19352c]/40">
+        Waiting {waitingCount}
+      </span>
+
+      <span className="font-mono text-[7px] uppercase tracking-[0.12em] text-[#19352c]/40">
+        Completed {completedCount}
+      </span>
+
+      <span className="font-mono text-[7px] uppercase tracking-[0.12em] text-[#c7542b]/60">
+        Missed {missedCount}
+      </span>
+    </div>
+  </div>
+
+  {/* PARTICIPANT GRID */}
+
+  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    {participants.map((participant) => {
+      const isSelected = selectedParticipant?.id === participant.id;
+
+      return (
+        <button
+          key={participant.id}
+          onClick={() => setSelectedParticipant(participant)}
+          className={`group relative overflow-hidden border p-4 text-left transition-all duration-200 ${
+            isSelected
+              ? "border-[#c7542b] bg-[#eee5d5]"
+              : "border-[#19352c]/10 bg-[#f8f1e6] hover:border-[#19352c]/30 hover:bg-[#eee5d5]"
+          }`}
+        >
+          {/* connection indicator */}
+
+          <div className="absolute right-4 top-4 flex items-center gap-1.5">
+            <span
+              className={`h-2 w-2 rounded-full ${
+                participant.connected
+                  ? "animate-pulse bg-[#19352c]"
+                  : "bg-[#19352c]/20"
+              }`}
+            />
+
+            <span className="font-mono text-[7px] uppercase tracking-[0.12em] text-[#19352c]/40">
+              {participant.connected ? "Online" : "Offline"}
+            </span>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#19352c]/10 bg-[#19352c]">
+              <span className="font-mono text-[8px] font-bold text-[#f8f1e6]">
+                {(participant.participantKey || participant.name)
+                  .slice(-3)
+                  .toUpperCase()}
+              </span>
             </div>
 
-            {/* =================================================
-                PARTICIPANT LIST
-            ================================================== */}
+            <div className="min-w-0 pr-16">
+              <p className="truncate font-mono text-[10px] font-bold tracking-[0.08em]">
+                {participant.name}
+              </p>
 
-            <div className="mt-7 border border-[#19352c]/10">
-              <div className="flex items-center justify-between border-b border-[#19352c]/10 px-5 py-4">
-                <div>
-                  <SectionLabel>Live Participants</SectionLabel>
-                  <p className="mt-1 font-mono text-[8px] text-[#19352c]/40">
-                    Status updates will eventually come from realtime
-                    session state.
-                  </p>
-                </div>
-
-                <Eye className="h-4 w-4 text-[#19352c]/35" />
-              </div>
-
-              <div className="divide-y divide-[#19352c]/10">
-                {participants.map((participant) => (
-                  <div
-                    key={participant.id}
-                    className="flex items-center justify-between gap-4 px-5 py-4"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#19352c]/10 bg-[#eee5d5]">
-                        <span className="font-mono text-[8px] font-bold">
-                          {participant.name
-                            .slice(0, 2)
-                            .toUpperCase()}
-                        </span>
-                      </div>
-
-                      <div className="min-w-0">
-                        <p className="truncate font-mono text-[10px] font-bold tracking-[0.08em]">
-                          {participant.name}
-                        </p>
-
-                        <p className="mt-0.5 font-mono text-[7px] uppercase tracking-[0.12em] text-[#19352c]/35">
-                          Participant {String(participant.id).padStart(
-                            2,
-                            "0"
-                          )}
-                        </p>
-                      </div>
-                    </div>
-
-                    <StatusBadge status={participant.status} />
-                  </div>
-                ))}
-              </div>
+              <p className="mt-1 font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-[#c7542b]">
+                {participant.participantKey || "UNKNOWN"}
+              </p>
             </div>
+          </div>
+
+          {/* Current location */}
+
+          <div className="mt-5 border-t border-[#19352c]/10 pt-4">
+            <p className="font-mono text-[7px] font-bold uppercase tracking-[0.14em] text-[#19352c]/35">
+              Current Location
+            </p>
+
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <div>
+                <p className="font-serif text-lg leading-none">
+                  EXP {String(participant.currentExperiment || session.experiment).padStart(2, "0")}
+                </p>
+
+                <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.12em] text-[#19352c]/45">
+                  {participant.currentExperiment === session.experiment
+                    ? stage
+                    : `Experiment ${participant.currentExperiment}`}
+                </p>
+              </div>
+
+              <StatusBadge status={participant.status} />
+            </div>
+          </div>
+
+          {/* Answer */}
+
+          <div className="mt-4 flex items-center justify-between border-t border-[#19352c]/10 pt-3">
+            <span className="font-mono text-[7px] font-bold uppercase tracking-[0.14em] text-[#19352c]/35">
+              Response
+            </span>
+
+            <span className="font-mono text-[10px] font-bold">
+              {participant.answer
+                ? String(participant.answer)
+                : "—"}
+            </span>
+          </div>
+        </button>
+      );
+    })}
+  </div>
+
+  {/* SELECTED PARTICIPANT */}
+
+  {selectedParticipant && (
+    <div className="mt-5 border border-[#c7542b]/30 bg-[#19352c] text-[#f8f1e6]">
+      <div className="flex items-center justify-between border-b border-[#f8f1e6]/10 px-5 py-4">
+        <div>
+          <p className="font-mono text-[8px] font-bold uppercase tracking-[0.18em] text-[#f8f1e6]/40">
+            Selected Participant
+          </p>
+
+          <p className="mt-1 font-serif text-2xl">
+            {selectedParticipant.name}
+          </p>
+        </div>
+
+        <button
+          onClick={() => setSelectedParticipant(null)}
+          className="flex h-8 w-8 items-center justify-center border border-[#f8f1e6]/15 transition hover:bg-[#f8f1e6]/10"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4">
+        <div className="border-b border-[#f8f1e6]/10 p-5 lg:border-b-0 lg:border-r">
+          <p className="font-mono text-[7px] uppercase tracking-[0.14em] text-[#f8f1e6]/35">
+            Participant ID
+          </p>
+
+          <p className="mt-2 font-mono text-sm font-bold">
+            {selectedParticipant.participantKey || "UNKNOWN"}
+          </p>
+        </div>
+
+        <div className="border-b border-[#f8f1e6]/10 p-5 lg:border-b-0 lg:border-r">
+          <p className="font-mono text-[7px] uppercase tracking-[0.14em] text-[#f8f1e6]/35">
+            Location
+          </p>
+
+          <p className="mt-2 font-serif text-lg">
+            Experiment{" "}
+            {String(
+              selectedParticipant.currentExperiment || session.experiment
+            ).padStart(2, "0")}
+          </p>
+
+          <p className="mt-1 font-mono text-[7px] uppercase tracking-[0.12em] text-[#f8f1e6]/40">
+            {selectedParticipant.currentExperiment === session.experiment
+              ? stage
+              : "Different experiment"}
+          </p>
+        </div>
+
+        <div className="border-b border-[#f8f1e6]/10 p-5 lg:border-b-0 lg:border-r">
+          <p className="font-mono text-[7px] uppercase tracking-[0.14em] text-[#f8f1e6]/35">
+            Status
+          </p>
+
+          <div className="mt-2">
+            <StatusBadge status={selectedParticipant.status} />
+          </div>
+
+          <p className="mt-2 font-mono text-[7px] uppercase tracking-[0.12em] text-[#f8f1e6]/40">
+            {selectedParticipant.connected ? "Currently online" : "Offline"}
+          </p>
+        </div>
+
+        <div className="p-5">
+          <p className="font-mono text-[7px] uppercase tracking-[0.14em] text-[#f8f1e6]/35">
+            Answer
+          </p>
+
+          <p className="mt-2 font-serif text-3xl text-[#c7542b]">
+            {selectedParticipant.answer
+              ? String(selectedParticipant.answer)
+              : "—"}
+          </p>
+
+          {selectedParticipant.submittedAt && (
+            <p className="mt-1 font-mono text-[7px] uppercase tracking-[0.12em] text-[#f8f1e6]/40">
+              Submitted live
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  )}
+</div>
+  <div className="border-t border-[#f8f1e6]/10 px-5 py-5">
+  <p className="font-mono text-[7px] font-bold uppercase tracking-[0.16em] text-[#f8f1e6]/35">
+    Facilitator Recovery
+  </p>
+
+  <div className="mt-3 flex flex-wrap gap-2">
+    <button
+      onClick={() => syncParticipantToRoom(selectedParticipant)}
+      className="bg-[#c7542b] px-4 py-3 font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-[#f8f1e6] transition hover:opacity-90"
+    >
+      Sync to Room
+    </button>
+
+    <button
+      onClick={() => setSelectedParticipant(null)}
+      className="border border-[#f8f1e6]/15 px-4 py-3 font-mono text-[8px] font-bold uppercase tracking-[0.14em] transition hover:bg-[#f8f1e6]/10"
+    >
+      Close
+    </button>
+  </div>
+
+  <p className="mt-3 font-mono text-[7px] leading-relaxed text-[#f8f1e6]/30">
+    Returns this participant to the current room experiment and clears their
+    previous response.
+  </p>
+</div>
 
             {/* =================================================
                 SOCIAL INFLUENCE GROUP CONTROL
