@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
+import { useHumanExperimentSession } from "@/lib/human-experiment/useHumanExperimentSession";
+import { supabase } from "@/lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
@@ -109,37 +112,223 @@ const demoGroupChoices: Record<GroupId, string> = {
 };
 
 export default function SocialInfluenceExperiment() {
-  const [stage, setStage] = useState<Stage>("intro");
+ const session = useHumanExperimentSession();
 
-    useEffect(() => {
-  window.scrollTo({
-    top: 0,
-    behavior: "instant",
-  });
-}, [stage]);
-  // TESTING ONLY:
-  // In the live version this group will come from the ARISE session.
-  const [activeGroup, setActiveGroup] = useState<GroupId>("women");
+const [stage, setStage] = useState<Stage>("intro");
+const [activeGroup, setActiveGroup] = useState<GroupId | null>(null);
+const [groupLoaded, setGroupLoaded] = useState(false);
 
-  const [firstChoice, setFirstChoice] = useState<string | null>(null);
-  const [secondChoice, setSecondChoice] = useState<string | null>(null);
+const [firstChoice, setFirstChoice] = useState<string | null>(null);
+const [secondChoice, setSecondChoice] = useState<string | null>(null);
+  const participantKey =
+  typeof window !== "undefined"
+    ? window.localStorage.getItem(
+        "arise-human-experiment-participant"
+      ) || ""
+    : "";
+
+useEffect(() => {
+  let cancelled = false;
+
+  async function loadParticipantGroup() {
+    if (!session.sessionId) return;
+
+    const participantKey = window.localStorage.getItem(
+      "arise-human-experiment-participant"
+    );
+
+    if (!participantKey) return;
+
+   if (!supabase) {
+  console.error("Supabase client is not available.");
+  return;
+}
+
+const { data, error } = await supabase
+  .from("experiment_participants")
+  .select("group_name")
+  .eq("session_id", session.sessionId)
+  .eq("participant_key", participantKey)
+  .maybeSingle();
+
+    if (error) {
+      console.error("Failed to load participant group:", error);
+      return;
+    }
+
+    if (cancelled) return;
+
+    const groupMap: Record<string, GroupId> = {
+      women: "women",
+      ot: "ot",
+      nt: "nt",
+      disciples: "disciples",
+    };
+
+    const group = data?.group_name
+      ? groupMap[data.group_name.toLowerCase()]
+      : undefined;
+
+    if (group) {
+      setActiveGroup(group);
+    }
+
+    setGroupLoaded(true);
+  }
+
+  void loadParticipantGroup();
+
+  return () => {
+    cancelled = true;
+  };
+}, [session.sessionId]);
+
+  useEffect(() => {
+  if (session.experiment !== 3) return;
+
+  if (session.stage === "INTRO") {
+    setStage("intro");
+    return;
+  }
+
+  if (session.stage === "START" || session.stage === "QUESTION") {
+    if (firstChoice === null) {
+      setStage("round-one");
+    } else if (secondChoice === null) {
+      setStage("round-two");
+    }
+
+    return;
+  }
+
+  if (session.stage === "WAIT") {
+    if (firstChoice !== null && secondChoice === null) {
+      setStage("waiting-two");
+    } else {
+      setStage("waiting-one");
+    }
+
+    return;
+  }
+
+  if (session.stage === "REVEAL") {
+    if (secondChoice !== null) {
+      setStage("final");
+    } else {
+      setStage("reveal");
+    }
+
+    return;
+  }
+
+  if (session.stage === "DISCUSSION") {
+    setStage("real-life");
+    return;
+  }
+
+  if (session.stage === "COMPLETE") {
+    setStage("takeaway");
+  }
+}, [
+  session.experiment,
+  session.stage,
+]);
 
   const activeGroupName =
     groups.find((group) => group.id === activeGroup)?.name ?? "";
 
   const otherGroups = groups.filter((group) => group.id !== activeGroup);
+const submitAnswer = async (value: {
+  round: 1 | 2;
+  choice: string;
+}) => {
+  if (!supabase) return;
+  if (!session.sessionId) return;
+  if (!participantKey) return;
 
-  const chooseRoundOne = (name: string) => {
-    setFirstChoice(name);
-    setStage("waiting-one");
+  // Get the participant's existing answer so Round 02
+  // does not overwrite Round 01.
+  const { data: existing, error: fetchError } = await supabase
+    .from("experiment_participants")
+    .select("answer")
+    .eq("session_id", session.sessionId)
+    .eq("participant_key", participantKey)
+    .maybeSingle();
+
+  if (fetchError) {
+    console.error(
+      "FAILED TO READ SOCIAL INFLUENCE ANSWER:",
+      fetchError
+    );
+    return;
+  }
+
+  const previousAnswer =
+    existing?.answer &&
+    typeof existing.answer === "object" &&
+    !Array.isArray(existing.answer)
+      ? existing.answer as Record<string, unknown>
+      : {};
+
+  const updatedAnswer = {
+    ...previousAnswer,
+    experiment: 3,
+    ...(value.round === 1
+      ? { round1: value.choice }
+      : { round2: value.choice }),
   };
 
-  const chooseRoundTwo = (name: string) => {
-    setSecondChoice(name);
-    setStage("waiting-two");
-  };
+  const { error } = await supabase
+    .from("experiment_participants")
+    .update({
+      answer: updatedAnswer,
+      status: "ANSWERED",
+      submitted_at: new Date().toISOString(),
+      connected: true,
+      current_experiment: 3,
+    })
+    .eq("session_id", session.sessionId)
+    .eq("participant_key", participantKey);
 
-  return (
+  if (error) {
+    console.error(
+      "FAILED TO SUBMIT SOCIAL INFLUENCE ANSWER:",
+      error
+    );
+    return;
+  }
+
+  console.log(
+    "SOCIAL INFLUENCE ANSWER SUBMITTED:",
+    participantKey,
+    updatedAnswer
+  );
+};
+      
+const chooseRoundOne = (name: string) => {
+  setFirstChoice(name);
+
+  void submitAnswer({
+    round: 1,
+    choice: name,
+  });
+
+  setStage("waiting-one");
+};
+
+const chooseRoundTwo = (name: string) => {
+  setSecondChoice(name);
+
+  void submitAnswer({
+    round: 2,
+    choice: name,
+  });
+
+  setStage("waiting-two");
+};
+
+return (
+  
     <main className="min-h-screen bg-[#f8f1e6] text-[#19352c]">
       <div className="mx-auto min-h-screen max-w-[1280px] px-5 py-6 sm:px-8 sm:py-10">
 
@@ -196,39 +385,6 @@ export default function SocialInfluenceExperiment() {
                   </p>
                 </div>
 
-                {/* LARGER GROUP PANEL — TESTING ONLY */}
-                <div className="mx-auto mt-12 max-w-4xl border border-[#19352c]/15 bg-[#eee5d5]/45 p-6 sm:p-8">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 opacity-50" />
-
-                   <p className="font-mono text-[12px] font-semibold uppercase tracking-[0.2em] text-[#c7542b] sm:text-[14px]">
-                   Testing — Select Participant Group
-                  </p>
-                  </div>
-
-                  <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    {groups.map((group) => (
-                      <button
-                        key={group.id}
-                        onClick={() => setActiveGroup(group.id)}
-                        className={`min-h-[86px] border p-4 text-left transition ${
-                          activeGroup === group.id
-                            ? "border-[#c7542b]/50 bg-[#f8f1e6]"
-                            : "border-[#19352c]/12 bg-[#f8f1e6]/40 hover:bg-[#f8f1e6]"
-                        }`}
-                      >
-                        <p className="font-mono text-[7px] uppercase tracking-[0.18em] text-[#19352c]/40">
-                          {activeGroup === group.id ? "YOUR GROUP" : "GROUP"}
-                        </p>
-
-                        <p className="mt-2 font-serif text-lg leading-tight">
-                          {group.name}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 {/* FIXED GROUP IDENTITY */}
                 <div className="mx-auto mt-5 max-w-4xl border border-[#c7542b]/25 bg-[#f3eadb] px-6 py-5 sm:px-8">
                   <p className="font-mono text-[7px] uppercase tracking-[0.25em] text-[#c7542b]">
@@ -241,7 +397,7 @@ export default function SocialInfluenceExperiment() {
                     </h2>
 
                     <p className="font-mono text-[7px] uppercase tracking-[0.18em] text-[#19352c]/40">
-                      Fixed after starting
+                      Assigned during the icebreaker
                     </p>
                   </div>
                 </div>
@@ -258,14 +414,6 @@ export default function SocialInfluenceExperiment() {
                     choices.
                   </p>
                 </div>
-
-                <button
-                  onClick={() => setStage("round-one")}
-                  className="mx-auto mt-10 flex items-center gap-4 bg-[#19352c] px-8 py-4 font-mono text-[9px] font-semibold uppercase tracking-[0.25em] text-[#f8f1e6] transition hover:opacity-90"
-                >
-                  Begin Round 01
-                  <ArrowRight className="h-4 w-4" strokeWidth={1.5} />
-                </button>
               </motion.div>
             )}
 
@@ -393,12 +541,6 @@ export default function SocialInfluenceExperiment() {
                 </div>
 
                 {/* LOCAL TEST CONTROL — will become facilitator-controlled */}
-                <button
-                  onClick={() => setStage("reveal")}
-                  className="mt-8 border border-[#19352c]/15 px-6 py-3 font-mono text-[7px] uppercase tracking-[0.2em] text-[#19352c]/50 hover:bg-[#eee5d5]"
-                >
-                  TEST: Reveal Other Groups
-                </button>
               </motion.div>
             )}
 
@@ -480,14 +622,6 @@ export default function SocialInfluenceExperiment() {
       <p className="mt-7 font-serif text-xl italic text-[#19352c]/55">
         Now you know what everyone else chose.
       </p>
-
-      <button
-        onClick={() => setStage("round-two")}
-        className="mx-auto mt-6 flex items-center gap-4 bg-[#19352c] px-7 py-4 font-mono text-[9px] font-semibold uppercase tracking-[0.25em] text-[#f8f1e6] transition hover:opacity-90"
-      >
-        Begin Round 02
-        <ArrowRight className="h-4 w-4" strokeWidth={1.5} />
-      </button>
     </div>
   </motion.div>
 )}
@@ -617,14 +751,7 @@ export default function SocialInfluenceExperiment() {
                       </p>
                     </div>
                   </div>
-                </div>
-
-                <button
-                  onClick={() => setStage("final")}
-                  className="mt-8 border border-[#19352c]/15 px-6 py-3 font-mono text-[7px] uppercase tracking-[0.2em] text-[#19352c]/50 hover:bg-[#eee5d5]"
-                >
-                  TEST: Final Reveal
-                </button>
+                </div>   
               </motion.div>
             )}
 
@@ -701,13 +828,6 @@ export default function SocialInfluenceExperiment() {
                   <p className="font-mono text-[8px] uppercase tracking-[0.3em] text-[#c7542b]">
                     Ask yourself
                   </p>
-                  <button
-               onClick={() => setStage("real-life")}
-               className="mx-auto mt-10 flex items-center gap-4 bg-[#19352c] px-8 py-4 font-mono text-[9px] font-semibold uppercase tracking-[0.25em] text-[#f8f1e6] transition hover:opacity-90"
-                >
-                 See It In Real Life
-               <ArrowRight className="h-4 w-4" strokeWidth={1.5} />
-                </button>
                   <p className="mt-5 font-serif text-2xl leading-9 sm:text-3xl">
                     Did we change because we learned something new — or because
                     we saw what everyone else chose?
@@ -957,13 +1077,6 @@ export default function SocialInfluenceExperiment() {
             <p className="mt-1 font-serif text-sm leading-6 text-[#19352c]/50">
               Everyone else seems to agree.
             </p>
-            <button
-  onClick={() => setStage("connection")}
-  className="mx-auto mt-10 flex items-center gap-4 bg-[#19352c] px-8 py-4 font-mono text-[9px] font-semibold uppercase tracking-[0.25em] text-[#f8f1e6] transition hover:opacity-90"
->
-  TEST: NEXT PAGE
-  <ArrowRight className="h-4 w-4" strokeWidth={1.5} />
-</button>
           </div>
         </div>
       </div>
@@ -1039,18 +1152,6 @@ export default function SocialInfluenceExperiment() {
 
       </div>
     </div>
-
-    <div className="flex justify-center">
-      <button
-        onClick={() => setStage("takeaway")}
-        className="mt-10 flex items-center gap-4 bg-[#19352c] px-8 py-4 font-mono text-[9px] font-semibold uppercase tracking-[0.25em] text-[#f8f1e6] transition hover:opacity-90"
-      >
-        Continue
-        <ArrowRight className="h-4 w-4" strokeWidth={1.5} />
-      </button>
-    </div>
-    <div className="flex justify-center">
-</div>
   </motion.div>
 )}       
     {stage === "takeaway" && (
@@ -1139,15 +1240,7 @@ export default function SocialInfluenceExperiment() {
         Then decide.
       </p>
     </div>
-
-    <div className="flex justify-center">
-      <button
-        onClick={() => setStage("last-question")}
-        className="mt-10 flex items-center gap-4 bg-[#19352c] px-8 py-4 font-mono text-[9px] font-semibold uppercase tracking-[0.25em] text-[#f8f1e6]"
-      >
-        One Last Question
-        <ArrowRight className="h-4 w-4" strokeWidth={1.5} />
-      </button>
+     <div className="flex justify-center">
     </div>
     <div className="flex justify-center">
 </div>
@@ -1182,16 +1275,8 @@ export default function SocialInfluenceExperiment() {
       if you couldn't see what everyone else chose?
     </p>
 
-    <button
-  onClick={() => setStage("connection")}
-  className="mx-auto mt-10 flex items-center gap-4 bg-[#19352c] px-8 py-4 font-mono text-[9px] font-semibold uppercase tracking-[0.25em] text-[#f8f1e6] transition hover:opacity-90"
->
-  TEST: NEXT PAGE
-  <ArrowRight className="h-4 w-4" strokeWidth={1.5} />
-</button>
   </motion.div>
-)}
-          
+)}        
           </AnimatePresence>
         </section>
       </div>

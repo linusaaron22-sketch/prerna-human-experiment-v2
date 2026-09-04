@@ -124,26 +124,40 @@ useEffect(() => {
 
   console.log("ANSWER SUBMITTED:", participantKey, value);
 };
-      useEffect(() => {
-    if (session.experiment !== 1) return;
 
-    const stageMap: Record<string, Stage> = {
-      INTRO: "intro",
-      START: "question",
-      QUESTION: "question",
-      WAIT: "wait",
-      REVEAL: "reveal",
-      DISCUSSION: "reveal",
-      COMPLETE: "complete",
-    };
+    useEffect(() => {
+  if (session.experiment !== 1) return;
 
-    const nextStage = stageMap[session.stage];
+  const stageMap: Record<string, Stage> = {
+    INTRO: "intro",
+    START: "question",
+    QUESTION: "question",
+    WAIT: "wait",
+    REVEAL: "reveal",
+    DISCUSSION: "reveal",
+    COMPLETE: "complete",
+  };
 
-if (nextStage) {
+  const nextStage = stageMap[session.stage];
+
+  if (!nextStage) return;
+
   setStage(nextStage);
-}
-  }, [session.experiment, session.stage]);
 
+  /*
+   * START is the facilitator's signal that a fresh
+   * participant interaction is beginning.
+   *
+   * This also makes the emergency "Force Back"
+   * recovery safe: if the facilitator sends the
+   * participant back to START, their previous answer
+   * is cleared and they can answer again.
+   */
+  if (session.stage === "START") {
+    setAnswer(null);
+    setHasAnswered(false);
+  }
+}, [session.experiment, session.stage]);
   useEffect(() => {
   window.scrollTo({
     top: 0,
@@ -180,19 +194,31 @@ if (nextStage) {
 ]);
 
 const chooseAnswer = (value: "A" | "B" | "SAME") => {
+  /*
+   * Participants are allowed to interact only during
+   * the QUESTION stage.
+   */
+  if (session.stage !== "QUESTION") return;
   if (isLocked) return;
   if (hasAnswered) return;
 
   setAnswer(value);
   setHasAnswered(true);
 
+  /*
+   * Record the answer immediately.
+   */
   void submitParticipantAnswer(value);
 
-  if (value === "SAME") {
-    setStage("same-bonus");
-    return;
-  }
-
+  /*
+   * IMPORTANT:
+   *
+   * The participant NEVER moves directly to a reveal
+   * or explanation screen.
+   *
+   * Every answer goes to WAIT.
+   * The facilitator must move the room to REVEAL.
+   */
   setStage("wait");
 };
 
@@ -266,17 +292,16 @@ return (
                     Choose what you naturally see.
                   </p>
                 </div>
+<div className="mt-10">
+  <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-[#19352c]/40">
+    WAIT FOR THE FACILITATOR
+  </p>
 
-                <button
-                 onClick={() => {
-  if (isLocked) return;
-
-  setStage("question");
-}}
-                  className="mt-10 rounded-full bg-[#19352c] px-8 py-4 font-mono text-[10px] font-bold uppercase tracking-[0.25em] text-[#f8f1e6] transition-transform hover:scale-[1.02]"
-                >
-                  Begin Experiment
-                </button>
+  <p className="mt-3 font-serif text-sm italic text-[#19352c]/45">
+    The experiment will begin when the room is ready.
+  </p>
+</div>
+              
               </motion.div>
             )}
 {/* =========================
@@ -445,30 +470,36 @@ return (
     <div className="mx-auto mt-5 grid max-w-xl grid-cols-3 gap-3">
 
       <button
-        onClick={() => {
-  if (isLocked) return;
-  chooseAnswer("A");
-}}
+      onClick={() => chooseAnswer("A")}
+disabled={
+  session.stage !== "QUESTION" ||
+  isLocked ||
+  hasAnswered
+}
         className="group border border-[#19352c]/20 bg-[#eee5d5] py-4 font-mono text-xs font-bold tracking-[0.25em] transition-all hover:-translate-y-0.5 hover:border-[#c7542b]/40 hover:bg-[#f8f1e6]"
       >
         A
       </button>
 
       <button
-        onClick={() => {
-  if (isLocked) return;
-  chooseAnswer("B");
-}}
+  onClick={() => chooseAnswer("B")}
+disabled={
+  session.stage !== "QUESTION" ||
+  isLocked ||
+  hasAnswered
+}
         className="group border border-[#19352c]/20 bg-[#eee5d5] py-4 font-mono text-xs font-bold tracking-[0.25em] transition-all hover:-translate-y-0.5 hover:border-[#c7542b]/40 hover:bg-[#f8f1e6]"
       >
         B
       </button>
 
       <button
-        onClick={() => {
-  if (isLocked) return;
-  chooseAnswer("SAME");
-}}
+     onClick={() => chooseAnswer("SAME")}
+disabled={
+  session.stage !== "QUESTION" ||
+  isLocked ||
+  hasAnswered
+}
         className="group border border-[#19352c]/20 bg-[#eee5d5] py-4 font-mono text-xs font-bold tracking-[0.25em] transition-all hover:-translate-y-0.5 hover:border-[#c7542b]/40 hover:bg-[#f8f1e6]"
       >
         SAME
@@ -601,27 +632,14 @@ return (
     >
       Your facilitator will explain why.
     </motion.p>
-
+      
     {/* Continue */}
-    <motion.button
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 1.1, duration: 0.5 }}
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.98 }}
-      onClick={() => {
-  if (isLocked) return;
-
-  setStage("wait");
-}}
-      className="mt-8 flex items-center gap-5 border border-[#19352c]/20 bg-[#19352c] px-7 py-4 font-mono text-[9px] font-semibold uppercase tracking-[0.25em] text-[#f8f1e6] transition-colors hover:bg-[#19352c]/90"
-    >
-      Continue
-      <ArrowRight className="h-4 w-4" strokeWidth={1.5} />
-    </motion.button>
+    <p className="mt-5 font-mono text-[8px] uppercase tracking-[0.25em] text-[#19352c]/35">
+      Waiting for facilitator
+    </p>
   </motion.div>
 )}
-    
+      
             {/* =========================
                 WAIT
             ========================== */}
@@ -796,17 +814,6 @@ return (
     </motion.div>
 
     {/* CONTINUE */}
-    <motion.button
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: 2.2, duration: 0.5 }}
-      onClick={() => {
-  if (isLocked) return;
-}}
-      className="mt-10 rounded-full bg-[#19352c] px-8 py-4 font-mono text-[10px] font-bold uppercase tracking-[0.25em] text-[#f8f1e6] transition-transform hover:scale-[1.02]"
-    >
-      Continue
-    </motion.button>
   </motion.div>
 )}
 
