@@ -24,7 +24,7 @@ const [timeLeft, setTimeLeft] = useState(20);
 
 const session = useHumanExperimentSession();
 
-  // 10-second timer for both decisions
+  // 20-second timer for both decisions
   useEffect(() => {
     if (stage !== "decision-one" && stage !== "decision-two") return;
 
@@ -266,7 +266,7 @@ useEffect(() => {
                     <motion.div
                       className="h-full bg-[#c7542b]"
                       animate={{
-                        width: `${(timeLeft / 10) * 100}%`,
+                        width: `${(timeLeft / 20) * 100}%`,
                       }}
                       transition={{
                         duration: 0.9,
@@ -346,13 +346,21 @@ useEffect(() => {
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#c7542b]" />
 
                     <p className="font-mono text-[8px] uppercase tracking-[0.25em] text-[#19352c]/45">
-                      Waiting for facilitator
+                      Decision 01 recorded
                     </p>
                   </div>
 
                   <p className="mt-3 font-serif text-sm italic text-[#19352c]/35">
-                    The experiment will continue when everyone is ready.
+                    Listen for the facilitator's instruction before continuing.
                   </p>
+
+                  <button
+                    onClick={() => setStage("decision-two")}
+                    className="mt-7 flex items-center gap-4 bg-[#19352c] px-7 py-4 font-mono text-[9px] font-semibold uppercase tracking-[0.25em] text-[#f8f1e6] transition-colors hover:bg-[#19352c]/90"
+                  >
+                    Continue to Decision 02
+                    <ArrowRight className="h-4 w-4" strokeWidth={1.5} />
+                  </button>
 
                 </div>
               </motion.div>
@@ -477,7 +485,7 @@ useEffect(() => {
                     <motion.div
                       className="h-full bg-[#c7542b]"
                       animate={{
-                        width: `${(timeLeft / 10) * 100}%`,
+                        width: `${(timeLeft / 20) * 100}%`,
                       }}
                       transition={{
                         duration: 0.9,
@@ -705,16 +713,17 @@ useEffect(() => {
 
                 </motion.div>
 
-                <motion.button
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 1.5 }}
-                  onClick={() => setStage("real-world")}
-                  className="mt-10 flex mx-auto items-center gap-5 bg-[#19352c] px-7 py-4 font-mono text-[9px] font-semibold uppercase tracking-[0.25em] text-[#f8f1e6] transition-colors hover:bg-[#19352c]/90"
-                >
-                  See It In Real Life
-                  <ArrowRight className="h-4 w-4" strokeWidth={1.5} />
-                </motion.button>
+                <div className="mt-10 flex flex-col items-center">
+                  <div className="flex items-center gap-3">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#c7542b]" />
+                    <p className="font-mono text-[8px] uppercase tracking-[0.25em] text-[#19352c]/45">
+                      Waiting for facilitator
+                    </p>
+                  </div>
+                  <p className="mt-3 font-serif text-sm italic text-[#19352c]/35">
+                    The next stage will appear when the facilitator advances the experiment.
+                  </p>
+                </div>
 
               </motion.div>
             )}
@@ -825,13 +834,17 @@ useEffect(() => {
 
                 </motion.div>
 
-                <button
-                  onClick={() => setStage("complete")}
-                  className="mt-10 flex mx-auto items-center gap-5 bg-[#19352c] px-7 py-4 font-mono text-[9px] font-semibold uppercase tracking-[0.25em] text-[#f8f1e6] transition-colors hover:bg-[#19352c]/90"
-                >
-                  Complete Experiment
-                  <ArrowRight className="h-4 w-4" strokeWidth={1.5} />
-                </button>
+                <div className="mt-10 flex flex-col items-center">
+                  <div className="flex items-center gap-3">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#c7542b]" />
+                    <p className="font-mono text-[8px] uppercase tracking-[0.25em] text-[#19352c]/45">
+                      Waiting for facilitator
+                    </p>
+                  </div>
+                  <p className="mt-3 font-serif text-sm italic text-[#19352c]/35">
+                    The experiment will complete when the facilitator advances the room.
+                  </p>
+                </div>
 
               </motion.div>
             )}
