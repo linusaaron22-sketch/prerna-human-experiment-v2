@@ -19,6 +19,7 @@ import {
 import {
   getExperimentSession,
   subscribeToExperimentSession,
+  type ExperimentSession,
 } from "@/lib/human-experiment/supabaseSession";
 
 import { supabase } from "@/lib/supabase";
@@ -150,7 +151,7 @@ const roomCode: string = savedRoomCode;
   let cleanup: (() => void) | undefined;
 
   async function loadLiveSession() {
-  const liveSession = await getExperimentSession(roomCode);
+  const liveSession = await getExperimentSession(roomCode); 
 
     if (!liveSession || cancelled) return;
 
@@ -247,22 +248,61 @@ const roomCode: string = savedRoomCode;
 
     setSavingProfile(true);
     setJoinError("");
+const { data: existingParticipant, error: existingError } =
+  await supabase
+    .from("experiment_participants")
+    .select("id")
+    .eq("session_id", session.sessionId)
+    .eq("participant_key", participantKey)
+    .maybeSingle();
 
-    const { error } = await supabase
-      .from("experiment_participants")
-      .update({
-        full_name: fullName.trim(),
-        display_name: fullName.trim(),
-        congregation: congregation.trim(),
-        age: numericAge,
-        connected: true,
-        status: "READY",
-        current_experiment: session.experiment,
-      })
-      .eq("session_id", session.sessionId)
-      .eq("participant_key", participantKey);
+if (existingError) {
+  console.error(
+    "FAILED TO CHECK PARTICIPANT:",
+    existingError
+  );
 
-    if (error) {
+  setJoinError("Could not connect you to the experiment.");
+  setSavingProfile(false);
+  return;
+}
+
+let error;
+
+if (existingParticipant) {
+  const result = await supabase
+    .from("experiment_participants")
+    .update({
+      full_name: fullName.trim(),
+      display_name: fullName.trim(),
+      congregation: congregation.trim(),
+      age: numericAge,
+      connected: true,
+      status: "READY",
+      current_experiment: session.experiment,
+    })
+    .eq("id", existingParticipant.id);
+
+  error = result.error;
+} else {
+  const result = await supabase
+    .from("experiment_participants")
+    .insert({
+      session_id: session.sessionId,
+      participant_key: participantKey,
+      full_name: fullName.trim(),
+      display_name: fullName.trim(),
+      congregation: congregation.trim(),
+      age: numericAge,
+      connected: true,
+      status: "READY",
+      current_experiment: session.experiment,
+    });
+
+  error = result.error;
+}
+
+if (error) {
       console.error(
         "FAILED TO SAVE PARTICIPANT PROFILE:",
         error
