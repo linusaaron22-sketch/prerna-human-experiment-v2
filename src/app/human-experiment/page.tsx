@@ -198,132 +198,96 @@ const roomCode: string = savedRoomCode;
   // SAVE PARTICIPANT PROFILE
   // ---------------------------------------------------------
 
-  const saveProfile = async () => {
-    if (!supabase) {
-      setJoinError("Database connection unavailable.");
-      return;
-    }
+ const saveProfile = async () => {
+  if (!supabase) {
+    setJoinError("Database connection unavailable.");
+    return;
+  }
 
-    const participantKey =
-      new URLSearchParams(window.location.search).get(
-        "participant"
-      ) ||
-      window.localStorage.getItem(
-        "arise-human-experiment-participant"
-      );
-
-    if (!participantKey) {
-      setJoinError(
-        "Participant ID not found. Please scan your QR code again."
-      );
-      return;
-    }
-
-    if (!fullName.trim()) {
-      setJoinError("Please enter your name.");
-      return;
-    }
-
-    if (!congregation.trim()) {
-      setJoinError("Please enter your congregation.");
-      return;
-    }
-
-    const numericAge = Number(age);
-
-    if (
-      !age ||
-      !Number.isInteger(numericAge) ||
-      numericAge < 1 ||
-      numericAge > 120
-    ) {
-      setJoinError("Please enter a valid age.");
-      return;
-    }
-
-    if (!session.sessionId) {
-      setJoinError("Session is not ready yet.");
-      return;
-    }
-
-    setSavingProfile(true);
-    setJoinError("");
-const { data: existingParticipant, error: existingError } =
-  await supabase
-    .from("experiment_participants")
-    .select("id")
-    .eq("session_id", session.sessionId)
-    .eq("participant_key", participantKey)
-    .maybeSingle();
-
-if (existingError) {
-  console.error(
-    "FAILED TO CHECK PARTICIPANT:",
-    existingError
-  );
-
-  setJoinError("Could not connect you to the experiment.");
-  setSavingProfile(false);
-  return;
-}
-
-let error;
-
-if (existingParticipant) {
-  const result = await supabase
-    .from("experiment_participants")
-    .update({
-      full_name: fullName.trim(),
-      display_name: fullName.trim(),
-      congregation: congregation.trim(),
-      age: numericAge,
-      connected: true,
-      status: "READY",
-      current_experiment: session.experiment,
-    })
-    .eq("id", existingParticipant.id);
-
-  error = result.error;
-} else {
-  const result = await supabase
-    .from("experiment_participants")
-    .insert({
-      session_id: session.sessionId,
-      participant_key: participantKey,
-      full_name: fullName.trim(),
-      display_name: fullName.trim(),
-      congregation: congregation.trim(),
-      age: numericAge,
-      connected: true,
-      status: "READY",
-      current_experiment: session.experiment,
-    });
-
-  error = result.error;
-}
-
-if (error) {
-      console.error(
-        "FAILED TO SAVE PARTICIPANT PROFILE:",
-        error
-      );
-
-      setJoinError(
-        "Could not save your information. Please try again."
-      );
-
-      setSavingProfile(false);
-      return;
-    }
-
-    console.log(
-      "PARTICIPANT PROFILE SAVED:",
-      participantKey
+  const participantKey =
+    new URLSearchParams(window.location.search).get("participant") ||
+    window.localStorage.getItem(
+      "arise-human-experiment-participant"
     );
 
-    setProfileComplete(true);
+  if (!participantKey) {
+    setJoinError(
+      "Participant ID not found. Please scan your QR code again."
+    );
+    return;
+  }
+
+  if (!fullName.trim()) {
+    setJoinError("Please enter your name.");
+    return;
+  }
+
+  if (!congregation.trim()) {
+    setJoinError("Please enter your congregation.");
+    return;
+  }
+
+  const numericAge = Number(age);
+
+  if (
+    !age ||
+    !Number.isInteger(numericAge) ||
+    numericAge < 1 ||
+    numericAge > 120
+  ) {
+    setJoinError("Please enter a valid age.");
+    return;
+  }
+
+  if (!session.sessionId) {
+    setJoinError("Session is not ready yet.");
+    return;
+  }
+
+  setSavingProfile(true);
+  setJoinError("");
+
+  const { error } = await supabase
+    .from("experiment_participants")
+    .upsert(
+      {
+        session_id: session.sessionId,
+        participant_key: participantKey,
+        full_name: fullName.trim(),
+        display_name: fullName.trim(),
+        congregation: congregation.trim(),
+        age: numericAge,
+        connected: true,
+        status: "READY",
+        current_experiment: session.experiment,
+      },
+      {
+        onConflict: "participant_key",
+      }
+    );
+
+  if (error) {
+    console.error(
+      "FAILED TO SAVE PARTICIPANT PROFILE:",
+      error
+    );
+
+    setJoinError(
+      "Could not save your information. Please try again."
+    );
+
     setSavingProfile(false);
-  };
+    return;
+  }
+
+  console.log(
+    "PARTICIPANT PROFILE SAVED:",
+    participantKey
+  );
+
+  setProfileComplete(true);
+  setSavingProfile(false);
+};
 
   // ---------------------------------------------------------
   // HERO
