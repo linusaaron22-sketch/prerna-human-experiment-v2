@@ -1282,15 +1282,22 @@ return (
                           const { supabase } = await import("@/lib/supabase");
                           if (!supabase) return;
                           const group = event.target.value || null;
-                          const { error } = await supabase
-                            .from("experiment_participants")
-                            .update({ group_name: group, is_representative: false })
-                            .eq("id", participant.id)
-                            .eq("session_id", supabaseSession.id);
-                          if (error) {
-                            console.error("Failed to assign group:", error);
-                            return;
-                          }
+                          const { data: updated, error } = await supabase
+                              .from("experiment_participants")
+                              .update({ group_name: group, is_representative: false })
+                              .eq("id", participant.id)
+                              .eq("session_id", supabaseSession.id)
+                              .select("id, group_name, is_representative")
+                              .maybeSingle();
+                           if (error) {
+                             console.error("Failed to assign group:", error);
+                             window.alert(`Group assignment failed: ${error.message}`);
+                             return;
+                           }
+                           if (!updated) {
+                             window.alert("Group assignment did not update this participant.");
+                             return;
+                           }
                           setParticipants((current) =>
                             current.map((item) =>
                               item.id === participant.id
@@ -1313,23 +1320,31 @@ return (
                           const { supabase } = await import("@/lib/supabase");
                           if (!supabase) return;
                           const { error: clearError } = await supabase
-                            .from("experiment_participants")
-                            .update({ is_representative: false })
-                            .eq("session_id", supabaseSession.id)
-                            .eq("group_name", participant.group);
-                          if (clearError) {
-                            console.error("Failed to clear group representative:", clearError);
-                            return;
-                          }
-                          const { error } = await supabase
-                            .from("experiment_participants")
-                            .update({ is_representative: true })
-                            .eq("id", participant.id)
-                            .eq("session_id", supabaseSession.id);
-                          if (error) {
-                            console.error("Failed to set representative:", error);
-                            return;
-                          }
+                             .from("experiment_participants")
+                             .update({ is_representative: false })
+                             .eq("session_id", supabaseSession.id)
+                             .eq("group_name", participant.group);
+                           if (clearError) {
+                             console.error("Failed to clear group representative:", clearError);
+                             window.alert(`Could not clear the existing representative: ${clearError.message}`);
+                             return;
+                           }
+                           const { data: updated, error } = await supabase
+                             .from("experiment_participants")
+                             .update({ is_representative: true })
+                             .eq("id", participant.id)
+                             .eq("session_id", supabaseSession.id)
+                             .select("id, group_name, is_representative")
+                             .maybeSingle();
+                           if (error) {
+                             console.error("Failed to set representative:", error);
+                             window.alert(`Representative assignment failed: ${error.message}`);
+                             return;
+                           }
+                           if (!updated) {
+                             window.alert("Representative assignment did not update this participant.");
+                             return;
+                           }
                           setParticipants((current) =>
                             current.map((item) =>
                               item.group === participant.group

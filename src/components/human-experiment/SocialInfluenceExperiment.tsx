@@ -241,7 +241,7 @@ useEffect(() => {
     groups.find((group) => group.id === activeGroup)?.name ?? "";
 
   const otherGroups = groups.filter((group) => group.id !== activeGroup);
-  const canSubmit = Boolean(activeGroup && isRepresentative && groupLoaded);
+  const canSubmit = Boolean(activeGroup && participantKey && groupLoaded && isRepresentative);
 const submitAnswer = async (value: {
   round: 1 | 2;
   choice: string;
@@ -249,13 +249,14 @@ const submitAnswer = async (value: {
   if (!supabase) return false;
   if (!session.sessionId) return false;
   if (!participantKey) return false;
-  if (!isRepresentative || !activeGroup) return false;
+  // Verify the current assignment directly from Supabase. React state can be
+  // one render behind immediately after an admin changes the representative.
 
   // Get the participant's existing answer so Round 02
   // does not overwrite Round 01.
   const { data: existing, error: fetchError } = await supabase
     .from("experiment_participants")
-    .select("answer")
+    .select("answer, group_name, is_representative")
     .eq("session_id", session.sessionId)
     .eq("participant_key", participantKey)
     .maybeSingle();
@@ -265,6 +266,18 @@ const submitAnswer = async (value: {
       "FAILED TO READ SOCIAL INFLUENCE ANSWER:",
       fetchError
     );
+    return false;
+  }
+
+  const currentGroup = String(existing?.group_name ?? "").trim().toLowerCase();
+  const hasGroup = Boolean(
+    currentGroup === "women" || currentGroup === "women of the bible" ||
+    currentGroup === "ot" || currentGroup === "old testament leaders" ||
+    currentGroup === "nt" || currentGroup === "new testament important members" ||
+    currentGroup === "disciples" || currentGroup === "the 12 disciples"
+  );
+  if (!existing?.is_representative || !hasGroup) {
+    console.warn("SOCIAL ANSWER BLOCKED: not assigned representative", existing);
     return false;
   }
 
@@ -312,14 +325,65 @@ const submitAnswer = async (value: {
 };
       
 const chooseRoundOne = async (name: string) => {
-  if (!canSubmit || String(session.stage) !== "QUESTION_1") return;
+  if (!participantKey || String(session.stage) !== "QUESTION_1") return;
+  const client = supabase;
+  if (!client || !session.sessionId) return;
+
+  const { data: currentParticipant, error } = await client
+    .from("experiment_participants")
+    .select("group_name, is_representative")
+    .eq("session_id", session.sessionId)
+    .eq("participant_key", participantKey)
+    .maybeSingle();
+
+  if (error) {
+    console.error("FAILED TO VERIFY SOCIAL REPRESENTATIVE:", error);
+    return;
+  }
+
+  const rawGroup = String(currentParticipant?.group_name ?? "").trim().toLowerCase();
+  const group: GroupId | null =
+    rawGroup === "women" || rawGroup === "women of the bible" ? "women" :
+    rawGroup === "ot" || rawGroup === "old testament leaders" ? "ot" :
+    rawGroup === "nt" || rawGroup === "new testament important members" ? "nt" :
+    rawGroup === "disciples" || rawGroup === "the 12 disciples" ? "disciples" : null;
+
+  if (!currentParticipant?.is_representative || !group) {
+    setActiveGroup(group);
+    setIsRepresentative(Boolean(currentParticipant?.is_representative));
+    console.warn("Participant is not the current Social Influence representative.");
+    return;
+  }
+
+  setActiveGroup(group);
+  setIsRepresentative(true);
   setFirstChoice(name);
   const saved = await submitAnswer({ round: 1, choice: name });
   if (saved) setStage("waiting-one");
 };
 
 const chooseRoundTwo = async (name: string) => {
-  if (!canSubmit || String(session.stage) !== "QUESTION_2") return;
+  if (!participantKey || String(session.stage) !== "QUESTION_2") return;
+  const client = supabase;
+  if (!client || !session.sessionId) return;
+
+  const { data: currentParticipant, error } = await client
+    .from("experiment_participants")
+    .select("group_name, is_representative")
+    .eq("session_id", session.sessionId)
+    .eq("participant_key", participantKey)
+    .maybeSingle();
+
+  if (error) {
+    console.error("FAILED TO VERIFY SOCIAL REPRESENTATIVE:", error);
+    return;
+  }
+  if (!currentParticipant?.is_representative) {
+    setIsRepresentative(false);
+    return;
+  }
+
+  setIsRepresentative(true);
   setSecondChoice(name);
   const saved = await submitAnswer({ round: 2, choice: name });
   if (saved) setStage("waiting-two");
