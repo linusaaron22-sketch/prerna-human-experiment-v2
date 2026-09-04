@@ -308,85 +308,68 @@ const stageIndex = experiment.stages.findIndex(
 );
   const [participants, setParticipants] = useState(INITIAL_PARTICIPANTS);
   useEffect(() => {
-  if (!supabaseSession?.id) {
-    setParticipants([]);
-    return;
-  }
-
-  let cancelled = false;
-  let channel: ReturnType<NonNullable<typeof import("@/lib/supabase").supabase>["channel"]> | null = null;
-
-  async function loadParticipants() {
-    const { supabase } = await import("@/lib/supabase");
-
-    if (!supabase) return;
-
-    const { data, error } = await supabase
-      .from("experiment_participants")
-      .select("*")
-      .eq("session_id", supabaseSession!.id)
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      console.error("Failed to load experiment participants:", error);
+    if (!supabaseSession?.id) {
+      setParticipants([]);
       return;
     }
 
-    if (!cancelled) {
-      setParticipants((data || []).map(mapParticipant));
+    let cancelled = false;
+    let channel: ReturnType<NonNullable<typeof import("@/lib/supabase").supabase>["channel"]> | null = null;
+    let poll: number | null = null;
+
+    async function loadParticipants() {
+      const { supabase } = await import("@/lib/supabase");
+      if (!supabase || cancelled) return;
+
+      const { data, error } = await supabase
+        .from("experiment_participants")
+        .select("*")
+        .eq("session_id", supabaseSession!.id)
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        console.error("Failed to load experiment participants:", error);
+        return;
+      }
+
+      if (!cancelled) setParticipants((data || []).map(mapParticipant));
     }
 
-    channel = supabase
-      .channel(
-        `experiment-participants-${supabaseSession!.id}-${Math.random()
-          .toString(36)
-          .slice(2)}`
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "experiment_participants",
-          filter: `session_id=eq.${supabaseSession!.id}`,
-        },
-        async () => {
-          const { data: refreshed, error: refreshError } = await supabase
-            .from("experiment_participants")
-            .select("*")
-            .eq("session_id", supabaseSession!.id)
-            .order("created_at", { ascending: true });
+    async function startRealtime() {
+      const { supabase } = await import("@/lib/supabase");
+      if (!supabase || cancelled) return;
 
-          if (refreshError) {
-            console.error(
-              "Failed to refresh experiment participants:",
-              refreshError
-            );
-            return;
-          }
-
-          if (!cancelled) {
-            setParticipants((refreshed || []).map(mapParticipant));
-          }
-        }
-      )
-      .subscribe();
-  }
-
-  loadParticipants();
-
-  return () => {
-    cancelled = true;
-
-    if (channel) {
-      void import("@/lib/supabase").then(({ supabase }) => {
-        if (supabase) {
-          void supabase.removeChannel(channel!);
-        }
-      });
+      channel = supabase
+        .channel(`experiment-participants-${supabaseSession!.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "experiment_participants",
+            filter: `session_id=eq.${supabaseSession!.id}`,
+          },
+          () => { void loadParticipants(); }
+        )
+        .subscribe();
     }
-  };
-}, [supabaseSession?.id]);
+
+    void loadParticipants();
+    void startRealtime();
+    // Polling is the reliable fallback so assignments update even when
+    // Supabase Realtime is not enabled for this table.
+    poll = window.setInterval(loadParticipants, 1000);
+
+    return () => {
+      cancelled = true;
+      if (poll !== null) window.clearInterval(poll);
+      if (channel) {
+        void import("@/lib/supabase").then(({ supabase }) => {
+          if (supabase) void supabase.removeChannel(channel!);
+        });
+      }
+    };
+  }, [supabaseSession?.id]);
 
   const [timer, setTimer] = useState(5 * 60 * 1000);
   const [timerRunning, setTimerRunning] = useState(false);
@@ -1299,12 +1282,22 @@ return (
                           const { supabase } = await import("@/lib/supabase");
                           if (!supabase) return;
                           const group = event.target.value || null;
-                          const updated = await supabase
+                          const { error } = await supabase
                             .from("experiment_participants")
                             .update({ group_name: group, is_representative: false })
                             .eq("id", participant.id)
                             .eq("session_id", supabaseSession.id);
-                          if (updated.error) console.error("Failed to assign group:", updated.error);
+                          if (error) {
+                            console.error("Failed to assign group:", error);
+                            return;
+                          }
+                          setParticipants((current) =>
+                            current.map((item) =>
+                              item.id === participant.id
+                                ? { ...item, group: group || undefined, isRepresentative: false }
+                                : item
+                            )
+                          );
                         }}
                         className="border border-[#19352c]/15 bg-[#f8f1e6] px-3 py-2 font-mono text-[8px] uppercase"
                       >
@@ -1324,13 +1317,26 @@ return (
                             .update({ is_representative: false })
                             .eq("session_id", supabaseSession.id)
                             .eq("group_name", participant.group);
-                          if (clearError) { console.error("Failed to clear group representative:", clearError); return; }
+                          if (clearError) {
+                            console.error("Failed to clear group representative:", clearError);
+                            return;
+                          }
                           const { error } = await supabase
                             .from("experiment_participants")
                             .update({ is_representative: true })
                             .eq("id", participant.id)
                             .eq("session_id", supabaseSession.id);
-                          if (error) console.error("Failed to set representative:", error);
+                          if (error) {
+                            console.error("Failed to set representative:", error);
+                            return;
+                          }
+                          setParticipants((current) =>
+                            current.map((item) =>
+                              item.group === participant.group
+                                ? { ...item, isRepresentative: item.id === participant.id }
+                                : item
+                            )
+                          );
                         }}
                         className={`border px-3 py-2 font-mono text-[8px] font-bold uppercase ${participant.isRepresentative ? "border-[#19352c] bg-[#19352c] text-[#f8f1e6]" : "border-[#19352c]/15"}`}
                       >
@@ -1364,7 +1370,15 @@ return (
 
                 <div className="grid sm:grid-cols-2">
                   {GROUPS.map((group, index) => {
-                    const members = participants.filter((p) => p.group === group.name);
+                    const members = participants.filter((p) => {
+                      const value = String(p.group || "").trim().toLowerCase();
+                      const normalized =
+                        value === "women" || value === "women of the bible" ? "Women of the Bible" :
+                        value === "ot" || value === "old testament leaders" ? "Old Testament Leaders" :
+                        value === "nt" || value === "new testament important members" ? "New Testament Important Members" :
+                        value === "disciples" || value === "the 12 disciples" ? "The 12 Disciples" : value;
+                      return normalized === group.name;
+                    });
                     const representatives = members.filter((p) => p.isRepresentative);
                     const submitted = representatives.some((p) => {
                       const answer = p.answer;

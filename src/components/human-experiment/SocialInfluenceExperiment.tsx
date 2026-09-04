@@ -126,33 +126,27 @@ const [groupChoices, setGroupChoices] = useState<Record<GroupId, string>>({} as 
 
 useEffect(() => {
   let cancelled = false;
+  let interval: number | null = null;
 
   async function loadParticipantGroup() {
-    if (!session.sessionId) return;
+    if (!session.sessionId || !supabase) return;
 
-    const participantKey = window.localStorage.getItem(
+    const key = window.localStorage.getItem(
       "arise-human-experiment-participant"
     );
+    if (!key) return;
 
-    if (!participantKey) return;
-
-   if (!supabase) {
-  console.error("Supabase client is not available.");
-  return;
-}
-
-const { data, error } = await supabase
-  .from("experiment_participants")
-  .select("group_name, is_representative, answer")
-  .eq("session_id", session.sessionId)
-  .eq("participant_key", participantKey)
-  .maybeSingle();
+    const { data, error } = await supabase
+      .from("experiment_participants")
+      .select("group_name, is_representative, answer")
+      .eq("session_id", session.sessionId)
+      .eq("participant_key", key)
+      .maybeSingle();
 
     if (error) {
       console.error("Failed to load participant group:", error);
       return;
     }
-
     if (cancelled) return;
 
     const rawGroup = String(data?.group_name ?? "").trim().toLowerCase();
@@ -167,21 +161,17 @@ const { data, error } = await supabase
               ? "disciples"
               : undefined;
 
-    if (group) {
-      setActiveGroup(group);
-    }
-
+    setActiveGroup(group ?? null);
     setIsRepresentative(Boolean(data?.is_representative));
-    // Do not restore old round choices into the active UI. The facilitator
-    // controls the current round through the server stage, and a new run
-    // must not open on a previous participant's answer.
     setGroupLoaded(true);
   }
 
   void loadParticipantGroup();
+  interval = window.setInterval(loadParticipantGroup, 1000);
 
   return () => {
     cancelled = true;
+    if (interval !== null) window.clearInterval(interval);
   };
 }, [session.sessionId]);
 
@@ -236,7 +226,7 @@ const { data, error } = await supabase
       const map: Record<GroupId, string> = {} as Record<GroupId, string>;
       for (const row of data || []) {
         const key = typeof row.group_name === "string" ? row.group_name.toLowerCase() : "";
-        const id = key.includes("women") ? "women" : key.includes("old testament") ? "ot" : key.includes("new testament") ? "nt" : key.includes("12 disciples") ? "disciples" : null;
+        const id = key.includes("women") ? "women" : key.includes("old testament") ? "ot" : key.includes("new testament") ? "nt" : key.includes("12 disciples") || key.includes("the 12 disciples") ? "disciples" : null;
         const answer = row.answer && typeof row.answer === "object" && !Array.isArray(row.answer) ? row.answer as Record<string, unknown> : {};
         if (id && typeof answer.round1 === "string") map[id] = answer.round1;
       }
@@ -255,11 +245,11 @@ const { data, error } = await supabase
 const submitAnswer = async (value: {
   round: 1 | 2;
   choice: string;
-}) => {
-  if (!supabase) return;
-  if (!session.sessionId) return;
-  if (!participantKey) return;
-  if (!isRepresentative || !activeGroup) return;
+}): Promise<boolean> => {
+  if (!supabase) return false;
+  if (!session.sessionId) return false;
+  if (!participantKey) return false;
+  if (!isRepresentative || !activeGroup) return false;
 
   // Get the participant's existing answer so Round 02
   // does not overwrite Round 01.
@@ -275,7 +265,7 @@ const submitAnswer = async (value: {
       "FAILED TO READ SOCIAL INFLUENCE ANSWER:",
       fetchError
     );
-    return;
+    return false;
   }
 
   const previousAnswer =
@@ -310,7 +300,7 @@ const submitAnswer = async (value: {
       "FAILED TO SUBMIT SOCIAL INFLUENCE ANSWER:",
       error
     );
-    return;
+    return false;
   }
 
   console.log(
@@ -318,20 +308,21 @@ const submitAnswer = async (value: {
     participantKey,
     updatedAnswer
   );
+  return true;
 };
       
 const chooseRoundOne = async (name: string) => {
   if (!canSubmit || String(session.stage) !== "QUESTION_1") return;
   setFirstChoice(name);
-  await submitAnswer({ round: 1, choice: name });
-  setStage("waiting-one");
+  const saved = await submitAnswer({ round: 1, choice: name });
+  if (saved) setStage("waiting-one");
 };
 
 const chooseRoundTwo = async (name: string) => {
   if (!canSubmit || String(session.stage) !== "QUESTION_2") return;
   setSecondChoice(name);
-  await submitAnswer({ round: 2, choice: name });
-  setStage("waiting-two");
+  const saved = await submitAnswer({ round: 2, choice: name });
+  if (saved) setStage("waiting-two");
 };
   
 
