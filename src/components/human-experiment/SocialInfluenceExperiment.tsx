@@ -113,10 +113,10 @@ const demoGroupChoices: Record<GroupId, string> = {
 
 export default function SocialInfluenceExperiment() {
  const session = useHumanExperimentSession();
-
 const [stage, setStage] = useState<Stage>("intro");
 const [activeGroup, setActiveGroup] = useState<GroupId | null>(null);
 const [groupLoaded, setGroupLoaded] = useState(false);
+const [isRepresentative, setIsRepresentative] = useState(false);
 
 const [firstChoice, setFirstChoice] = useState<string | null>(null);
 const [secondChoice, setSecondChoice] = useState<string | null>(null);
@@ -146,7 +146,7 @@ useEffect(() => {
 
 const { data, error } = await supabase
   .from("experiment_participants")
-  .select("group_name")
+  .select("group_name, is_representative")
   .eq("session_id", session.sessionId)
   .eq("participant_key", participantKey)
   .maybeSingle();
@@ -168,28 +168,20 @@ const { data, error } = await supabase
     const group = data?.group_name
       ? groupMap[data.group_name.toLowerCase()]
       : undefined;
+if (group) {
+  setActiveGroup(group);
+}
 
-    if (group) {
-      setActiveGroup(group);
-    }
+setIsRepresentative(Boolean(data?.is_representative));
+setGroupLoaded(true);
+}
 
-    setGroupLoaded(true);
-  }
+void loadParticipantGroup();
 
-  void loadParticipantGroup();
+return () => {
+  cancelled = true;
+};
 
-  return () => {
-    cancelled = true;
-  };
-}, [session.sessionId]);
-
-  useEffect(() => {
-  if (session.experiment !== 3) return;
-
-  if (session.stage === "INTRO") {
-    setStage("intro");
-    return;
-  }
 
   if (session.stage === "START" || session.stage === "QUESTION") {
     if (firstChoice === null) {
@@ -306,6 +298,8 @@ const submitAnswer = async (value: {
 };
       
 const chooseRoundOne = (name: string) => {
+  if (!isRepresentative) return;
+
   setFirstChoice(name);
 
   void submitAnswer({
@@ -317,6 +311,8 @@ const chooseRoundOne = (name: string) => {
 };
 
 const chooseRoundTwo = (name: string) => {
+  if (!isRepresentative) return;
+
   setSecondChoice(name);
 
   void submitAnswer({
@@ -474,6 +470,7 @@ return (
   animate={{ opacity: 1, y: 0 }}
   transition={{ delay: index * 0.04 }}
   onClick={() => chooseRoundOne(character.name)}
+disabled={!isRepresentative}
   className="group overflow-hidden border border-[#19352c]/12 bg-[#eee5d5]/35 text-left transition-all hover:-translate-y-1 hover:border-[#c7542b]/45 hover:bg-[#f8f1e6]"
 >
   <div className="overflow-hidden bg-[#e7ddcc]">
@@ -674,6 +671,7 @@ return (
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.04 }}
                       onClick={() => chooseRoundTwo(character.name)}
+                      disabled={!isRepresentative}
                       className={`group overflow-hidden border text-left transition-all hover:-translate-y-1 ${
                         character.name === firstChoice
                           ? "border-[#c7542b]/35 bg-[#f3eadb]"

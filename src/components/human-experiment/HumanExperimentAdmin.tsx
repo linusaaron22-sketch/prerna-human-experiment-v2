@@ -34,6 +34,7 @@ import {
   setSession,
   type HumanExperimentSession,
 } from "@/lib/human-experiment/session";
+import { supabase } from "@/lib/supabase";
 
 type Experiment = {
   id: number;
@@ -658,6 +659,60 @@ const responseRate =
   );
  setTimerRunning(false);
 }
+async function assignParticipantGroup(
+  participantId: number,
+  groupName: string
+) {
+  if (!supabaseSession?.id) return;
+if (!supabase) return;
+
+const { error } = await supabase
+    .from("experiment_participants")
+    .update({
+      group_name: groupName,
+      is_representative: false,
+    })
+    .eq("id", participantId)
+    .eq("session_id", supabaseSession.id);
+
+  if (error) {
+    console.error("FAILED TO ASSIGN GROUP:", error);
+  }
+}
+
+async function setGroupRepresentative(
+  participantId: number,
+  groupName: string
+) {
+  if (!supabaseSession?.id) return;
+if (!supabase) return;
+
+// Remove representative status
+const { error: clearError } = await supabase
+    .from("experiment_participants")
+    .update({ is_representative: false })
+    .eq("session_id", supabaseSession.id)
+    .eq("group_name", groupName);
+
+  if (clearError) {
+    console.error("FAILED TO CLEAR REPRESENTATIVE:", clearError);
+    return;
+  }
+
+  // Make the selected participant the representative.
+  const { error } = await supabase
+    .from("experiment_participants")
+    .update({
+      group_name: groupName,
+      is_representative: true,
+    })
+    .eq("id", participantId)
+    .eq("session_id", supabaseSession.id);
+
+  if (error) {
+    console.error("FAILED TO SET REPRESENTATIVE:", error);
+  }
+}
 async function completeExperiment() {
   if (!supabaseSession) return;
 
@@ -679,11 +734,7 @@ async function completeExperiment() {
 
   setTimerRunning(false);
 }
-async function syncParticipantToRoom(
-  participant: Participant | null
-) {
-  if (!participant) return;
-
+async function syncParticipantToRoom(participant: Participant) {
   if (!supabaseSession) return;
 
   const { supabase } = await import("@/lib/supabase");
@@ -1497,100 +1548,94 @@ return (
     </div>
   )}
 </div>
-  <div className="border-t border-[#f8f1e6]/10 px-5 py-5">
-  <p className="font-mono text-[7px] font-bold uppercase tracking-[0.16em] text-[#f8f1e6]/35">
-    Facilitator Recovery
-  </p>
-
-  <div className="mt-3 flex flex-wrap gap-2">
-    <button
-      onClick={() => syncParticipantToRoom(selectedParticipant)}
-      className="bg-[#c7542b] px-4 py-3 font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-[#f8f1e6] transition hover:opacity-90"
-    >
-      Sync to Room
-    </button>
-
-    <button
-      onClick={() => setSelectedParticipant(null)}
-      className="border border-[#f8f1e6]/15 px-4 py-3 font-mono text-[8px] font-bold uppercase tracking-[0.14em] transition hover:bg-[#f8f1e6]/10"
-    >
-      Close
-    </button>
-  </div>
-
-  <p className="mt-3 font-mono text-[7px] leading-relaxed text-[#f8f1e6]/30">
-    Returns this participant to the current room experiment and clears their
-    previous response.
-  </p>
-</div>
 
             {/* =================================================
                 SOCIAL INFLUENCE GROUP CONTROL
             ================================================== */}
+            {/* =================================================
+    SOCIAL INFLUENCE GROUP CONTROL
+================================================== */}
 
-            {experiment.id === 3 && (
-              <div className="mt-7 border border-[#19352c]/10">
-                <div className="flex items-center justify-between border-b border-[#19352c]/10 px-5 py-4">
-                  <div>
-                    <SectionLabel>
-                      Social Influence · Group Control
-                    </SectionLabel>
+{experiment.id === 3 && (
+  <div className="mt-7 border border-[#19352c]/10">
+    <div className="border-b border-[#19352c]/10 px-5 py-4">
+      <SectionLabel>
+        Social Influence · Group Assignment
+      </SectionLabel>
 
-                    <p className="mt-1 font-mono text-[8px] text-[#19352c]/40">
-                      One representative submits for each group.
-                    </p>
-                  </div>
+      <p className="mt-1 font-mono text-[8px] text-[#19352c]/40">
+        Assign participants to groups and select one representative per group.
+      </p>
+    </div>
 
-                  <Users className="h-4 w-4 text-[#c7542b]" />
-                </div>
+    <div className="divide-y divide-[#19352c]/10">
+      {participants.map((participant) => (
+        <div
+          key={participant.id}
+          className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <p className="font-mono text-[10px] font-bold">
+              {participant.name}
+            </p>
 
-                <div className="grid sm:grid-cols-2">
-                  {GROUPS.map((group, index) => {
-                    const submitted = group.submitted === group.total;
+            <p className="mt-1 font-mono text-[7px] uppercase tracking-[0.12em] text-[#19352c]/40">
+              {participant.participantKey}
+            </p>
+          </div>
 
-                    return (
-                      <div
-                        key={group.name}
-                        className="border-b border-[#19352c]/10 p-5 sm:nth-[2n]:border-l"
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex gap-3">
-                            <span className="font-mono text-[9px] font-bold text-[#c7542b]">
-                              0{index + 1}
-                            </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={participant.group || ""}
+              onChange={(event) =>
+                void assignParticipantGroup(
+                  participant.id,
+                  event.target.value
+                )
+              }
+              className="border border-[#19352c]/15 bg-[#f8f1e6] px-3 py-2 font-mono text-[8px] uppercase tracking-[0.08em]"
+            >
+              <option value="">Assign group</option>
 
-                            <div>
-                              <p className="font-serif text-lg leading-tight">
-                                {group.name}
-                              </p>
+              {GROUPS.map((group) => (
+                <option key={group.name} value={group.name}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
 
-                              <p className="mt-2 font-mono text-[8px] uppercase tracking-[0.12em] text-[#19352c]/40">
-                                {group.submitted} / {group.total} submitted
-                              </p>
-                            </div>
-                          </div>
+            <button
+              type="button"
+              disabled={!participant.group}
+              onClick={() =>
+                participant.group &&
+                void setGroupRepresentative(
+                  participant.id,
+                  participant.group
+                )
+              }
+              className={`px-3 py-2 font-mono text-[8px] font-bold uppercase tracking-[0.08em] ${
+                participant.isRepresentative
+                  ? "bg-[#19352c] text-[#f8f1e6]"
+                  : "border border-[#19352c]/15 bg-[#eee5d5]"
+              } disabled:cursor-not-allowed disabled:opacity-30`}
+            >
+              {participant.isRepresentative
+                ? "Representative ✓"
+                : "Make Representative"}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
 
-                          {submitted ? (
-                            <Check className="h-4 w-4 text-[#19352c]" />
-                          ) : (
-                            <Circle className="h-4 w-4 text-[#19352c]/20" />
-                          )}
-                        </div>
-
-                        <div className="mt-5 h-1 bg-[#19352c]/8">
-                          <div
-                            className="h-full bg-[#c7542b]"
-                            style={{
-                              width: `${
-                                (group.submitted / group.total) * 100
-                              }%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+    <div className="border-t border-[#19352c]/10 bg-[#eee5d5] px-5 py-4">
+      <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[#19352c]/45">
+        4 groups · 1 representative per group
+      </p>
+    </div>
+  </div>
+)}
 
                 <div className="border-t border-[#19352c]/10 bg-[#eee5d5] p-5">
                   <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
@@ -1620,8 +1665,6 @@ return (
                   </div>
                 </div>
               </div>
-            )}
-
             {/* =================================================
                 SECURITY / CONTROL FOOTER
             ================================================== */}
@@ -1637,7 +1680,6 @@ return (
               <p className="font-mono text-[8px] uppercase tracking-[0.14em] text-[#19352c]/30">
                 ARISE · HUMAN EXPERIMENT · LIVE SESSION
               </p>
-            </div>
           </div>
         </section>
       </div>
