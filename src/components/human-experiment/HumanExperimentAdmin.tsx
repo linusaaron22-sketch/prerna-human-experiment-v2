@@ -307,6 +307,7 @@ const stageIndex = experiment.stages.findIndex(
   (item) => item === session.stage
 );
   const [participants, setParticipants] = useState(INITIAL_PARTICIPANTS);
+  const [pendingGroups, setPendingGroups] = useState<Record<string, string>>({});
   useEffect(() => {
     if (!supabaseSession?.id) {
       setParticipants([]);
@@ -505,6 +506,56 @@ setSessionState(toLocalSession(created));
     );
   }, [experiment.stages.length, stageIndex]);
 
+ async function assignParticipantGroup(
+    participant: Participant,
+    selectedGroup: string
+  ) {
+    if (!supabaseSession) return;
+
+    const group = selectedGroup.trim() || null;
+    if (!participant.participantKey) {
+      window.alert("This participant has no participant key, so the group cannot be assigned.");
+      return;
+    }
+
+    const { supabase } = await import("@/lib/supabase");
+    if (!supabase) return;
+
+    const { data: updated, error } = await supabase
+      .from("experiment_participants")
+      .update({ group_name: group, is_representative: false })
+      .eq("session_id", supabaseSession.id)
+      .eq("participant_key", participant.participantKey)
+      .select("id, participant_key, group_name, is_representative")
+      .maybeSingle();
+
+    if (error) {
+      console.error("Failed to assign participant group:", error);
+      window.alert(`Group assignment failed: ${error.message}`);
+      return;
+    }
+
+    if (!updated) {
+      window.alert(
+        `Group assignment did not update ${participant.name}. The participant/session could not be matched.`
+      );
+      return;
+    }
+
+    setParticipants((current) =>
+      current.map((item) =>
+        item.participantKey === participant.participantKey
+          ? { ...item, group: group || undefined, isRepresentative: false }
+          : item
+      )
+    );
+
+    setPendingGroups((current) => {
+      const next = { ...current };
+      delete next[participant.participantKey];
+      return next;
+    });
+  }
  async function selectExperiment(index: number) {
   if (!supabaseSession) return;
 
@@ -1276,35 +1327,16 @@ return (
                         </p>
                       </div>
                       <select
-                        value={participant.group || ""}
-                        onChange={async (event) => {
-                          if (!supabaseSession) return;
-                          const { supabase } = await import("@/lib/supabase");
-                          if (!supabase) return;
-                          const group = event.target.value || null;
-                          const { data: updated, error } = await supabase
-                              .from("experiment_participants")
-                              .update({ group_name: group, is_representative: false })
-                              .eq("id", participant.id)
-                              .eq("session_id", supabaseSession.id)
-                              .select("id, group_name, is_representative")
-                              .maybeSingle();
-                           if (error) {
-                             console.error("Failed to assign group:", error);
-                             window.alert(`Group assignment failed: ${error.message}`);
-                             return;
-                           }
-                           if (!updated) {
-                             window.alert("Group assignment did not update this participant.");
-                             return;
-                           }
-                          setParticipants((current) =>
-                            current.map((item) =>
-                              item.id === participant.id
-                                ? { ...item, group: group || undefined, isRepresentative: false }
-                                : item
-                            )
-                          );
+                        value={
+                          pendingGroups[participant.participantKey] ??
+                          participant.group ??
+                          ""
+                        }
+                        onChange={(event) => {
+                          setPendingGroups((current) => ({
+                            ...current,
+                            [participant.participantKey]: event.target.value,
+                          }));
                         }}
                         className="border border-[#19352c]/15 bg-[#f8f1e6] px-3 py-2 font-mono text-[8px] uppercase"
                       >
@@ -1314,6 +1346,25 @@ return (
                         <option value="New Testament Important Members">New Testament Important Members</option>
                         <option value="The 12 Disciples">The 12 Disciples</option>
                       </select>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void assignParticipantGroup(
+                            participant,
+                            pendingGroups[participant.participantKey] ?? participant.group ?? ""
+                          )
+                        }
+                        disabled={
+                          (pendingGroups[participant.participantKey] ?? participant.group ?? "") ===
+                          (participant.group ?? "")
+                        }
+                        className="border border-[#19352c] bg-[#19352c] px-3 py-2 font-mono text-[8px] font-bold uppercase text-[#f8f1e6] disabled:cursor-not-allowed disabled:opacity-35"
+                      >
+                        {(pendingGroups[participant.participantKey] ?? participant.group ?? "") ===
+                        (participant.group ?? "")
+                          ? "Assigned ✓"
+                          : "Assign Group"}
+                      </button>
                       <button
                         onClick={async () => {
                           if (!supabaseSession || !participant.group) return;
@@ -1332,9 +1383,9 @@ return (
                            const { data: updated, error } = await supabase
                              .from("experiment_participants")
                              .update({ is_representative: true })
-                             .eq("id", participant.id)
+                             .eq("participant_key", participant.participantKey)
                              .eq("session_id", supabaseSession.id)
-                             .select("id, group_name, is_representative")
+                             .select("id, participant_key, group_name, is_representative")
                              .maybeSingle();
                            if (error) {
                              console.error("Failed to set representative:", error);
