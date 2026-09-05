@@ -136,33 +136,64 @@ useEffect(() => {
     );
     if (!key) return;
 
-    const { data, error } = await supabase
+    // Load the whole current session so every member can stay in sync with
+    // the group's assigned representative and the representative's answers.
+    const { data: rows, error } = await supabase
       .from("experiment_participants")
-      .select("group_name, is_representative, answer")
-      .eq("session_id", session.sessionId)
-      .eq("participant_key", key)
-      .maybeSingle();
+      .select("participant_key, group_name, is_representative, answer")
+      .eq("session_id", session.sessionId);
 
     if (error) {
-      console.error("Failed to load participant group:", error);
+      console.error("Failed to load Social Influence group state:", error);
       return;
     }
     if (cancelled) return;
 
-    const rawGroup = String(data?.group_name ?? "").trim().toLowerCase();
-    const group: GroupId | undefined =
-      rawGroup === "women" || rawGroup === "women of the bible"
-        ? "women"
-        : rawGroup === "ot" || rawGroup === "old testament leaders"
-          ? "ot"
-          : rawGroup === "nt" || rawGroup === "new testament important members"
-            ? "nt"
-            : rawGroup === "disciples" || rawGroup === "the 12 disciples"
-              ? "disciples"
-              : undefined;
+    const participants = rows || [];
+    const me = participants.find((row) => row.participant_key === key);
 
-    setActiveGroup(group ?? null);
-    setIsRepresentative(Boolean(data?.is_representative));
+    const normalizeGroup = (value: unknown): GroupId | null => {
+      const raw = String(value ?? "").trim().toLowerCase();
+      if (raw === "women" || raw === "women of the bible") return "women";
+      if (raw === "ot" || raw === "old testament leaders") return "ot";
+      if (raw === "nt" || raw === "new testament important members") return "nt";
+      if (raw === "disciples" || raw === "the 12 disciples") return "disciples";
+      return null;
+    };
+
+    const group = normalizeGroup(me?.group_name);
+    const representative = group
+      ? participants.find(
+          (row) =>
+            normalizeGroup(row.group_name) === group &&
+            Boolean(row.is_representative)
+        )
+      : undefined;
+
+    const representativeAnswer =
+      representative?.answer &&
+      typeof representative.answer === "object" &&
+      !Array.isArray(representative.answer)
+        ? representative.answer as Record<string, unknown>
+        : {};
+
+    setActiveGroup(group);
+    setIsRepresentative(Boolean(me?.is_representative));
+
+    // IMPORTANT: the representative's answer is the group's answer.
+    // This keeps every phone in the same group synchronized, not just the
+    // representative's own browser.
+    setFirstChoice(
+      typeof representativeAnswer.round1 === "string"
+        ? representativeAnswer.round1
+        : null
+    );
+    setSecondChoice(
+      typeof representativeAnswer.round2 === "string"
+        ? representativeAnswer.round2
+        : null
+    );
+
     setGroupLoaded(true);
   }
 
@@ -219,7 +250,7 @@ useEffect(() => {
     const loadChoices = async () => {
       const { data, error } = await client
         .from("experiment_participants")
-        .select("group_name, answer")
+        .select("group_name, answer, is_representative")
         .eq("session_id", session.sessionId);
       if (error) { console.error("FAILED TO LOAD SOCIAL REVEAL:", error); return; }
       if (cancelled) return;
@@ -228,7 +259,7 @@ useEffect(() => {
         const key = typeof row.group_name === "string" ? row.group_name.toLowerCase() : "";
         const id = key.includes("women") ? "women" : key.includes("old testament") ? "ot" : key.includes("new testament") ? "nt" : key.includes("12 disciples") || key.includes("the 12 disciples") ? "disciples" : null;
         const answer = row.answer && typeof row.answer === "object" && !Array.isArray(row.answer) ? row.answer as Record<string, unknown> : {};
-        if (id && typeof answer.round1 === "string") map[id] = answer.round1;
+        if (id && row.is_representative && typeof answer.round1 === "string") map[id] = answer.round1;
       }
       setGroupChoices(map);
     };
@@ -378,11 +409,20 @@ const chooseRoundTwo = async (name: string) => {
     console.error("FAILED TO VERIFY SOCIAL REPRESENTATIVE:", error);
     return;
   }
-  if (!currentParticipant?.is_representative) {
+  const rawGroup = String(currentParticipant?.group_name ?? "").trim().toLowerCase();
+  const group: GroupId | null =
+    rawGroup === "women" || rawGroup === "women of the bible" ? "women" :
+    rawGroup === "ot" || rawGroup === "old testament leaders" ? "ot" :
+    rawGroup === "nt" || rawGroup === "new testament important members" ? "nt" :
+    rawGroup === "disciples" || rawGroup === "the 12 disciples" ? "disciples" : null;
+
+  if (!currentParticipant?.is_representative || !group) {
+    setActiveGroup(group);
     setIsRepresentative(false);
     return;
   }
 
+  setActiveGroup(group);
   setIsRepresentative(true);
   setSecondChoice(name);
   const saved = await submitAnswer({ round: 2, choice: name });
