@@ -49,32 +49,32 @@ export default function HumanExperimentPage() {
 useEffect(() => {
   const params = new URLSearchParams(window.location.search);
 
-  const room =
-    params.get("room") ||
-    window.localStorage.getItem("arise-human-experiment-room");
+  const participant = params.get("participant");
+  const room = params.get("room");
+  const step = params.get("step");
 
-  const participant =
-    params.get("participant") ||
-    window.localStorage.getItem(
-      "arise-human-experiment-participant"
-    );
-
+  // A QR scan should identify the participant only. Never reuse a
+  // previously saved room code to skip the introduction or room entry.
   if (participant) {
+    const normalizedParticipant = participant.toUpperCase();
     window.localStorage.setItem(
       "arise-human-experiment-participant",
-      participant.toUpperCase()
+      normalizedParticipant
     );
   }
 
-  if (room) {
+  // Only the redirect performed after a successful manual room-code
+  // entry may restore the joined/profile step.
+  if (room && step === "profile") {
     setRoomCode(room);
     setJoined(true);
     setShowHero(false);
-
-    window.localStorage.setItem(
-      "arise-human-experiment-room",
-      room
-    );
+    window.localStorage.setItem("arise-human-experiment-room", room);
+  } else {
+    window.localStorage.removeItem("arise-human-experiment-room");
+    setRoomCode("");
+    setJoined(false);
+    setShowHero(true);
   }
 }, []);
 
@@ -131,7 +131,9 @@ useEffect(() => {
     window.location.href =
       `/human-experiment?room=${encodeURIComponent(
         code
-      )}&participant=${encodeURIComponent(participant)}`;
+      )}&participant=${encodeURIComponent(
+        participant.toUpperCase()
+      )}&step=profile`;
   };
 
   // ---------------------------------------------------------
