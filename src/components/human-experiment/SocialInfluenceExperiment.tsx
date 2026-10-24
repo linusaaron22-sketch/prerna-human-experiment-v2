@@ -136,64 +136,33 @@ useEffect(() => {
     );
     if (!key) return;
 
-    // Load the whole current session so every member can stay in sync with
-    // the group's assigned representative and the representative's answers.
-    const { data: rows, error } = await supabase
+    const { data, error } = await supabase
       .from("experiment_participants")
-      .select("participant_key, group_name, is_representative, answer")
-      .eq("session_id", session.sessionId);
+      .select("group_name, is_representative, answer")
+      .eq("session_id", session.sessionId)
+      .eq("participant_key", key)
+      .maybeSingle();
 
     if (error) {
-      console.error("Failed to load Social Influence group state:", error);
+      console.error("Failed to load participant group:", error);
       return;
     }
     if (cancelled) return;
 
-    const participants = rows || [];
-    const me = participants.find((row) => row.participant_key === key);
+    const rawGroup = String(data?.group_name ?? "").trim().toLowerCase();
+    const group: GroupId | undefined =
+      rawGroup === "women" || rawGroup === "women of the bible"
+        ? "women"
+        : rawGroup === "ot" || rawGroup === "old testament leaders"
+          ? "ot"
+          : rawGroup === "nt" || rawGroup === "new testament important members"
+            ? "nt"
+            : rawGroup === "disciples" || rawGroup === "the 12 disciples"
+              ? "disciples"
+              : undefined;
 
-    const normalizeGroup = (value: unknown): GroupId | null => {
-      const raw = String(value ?? "").trim().toLowerCase();
-      if (raw === "women" || raw === "women of the bible") return "women";
-      if (raw === "ot" || raw === "old testament leaders") return "ot";
-      if (raw === "nt" || raw === "new testament important members") return "nt";
-      if (raw === "disciples" || raw === "the 12 disciples") return "disciples";
-      return null;
-    };
-
-    const group = normalizeGroup(me?.group_name);
-    const representative = group
-      ? participants.find(
-          (row) =>
-            normalizeGroup(row.group_name) === group &&
-            Boolean(row.is_representative)
-        )
-      : undefined;
-
-    const representativeAnswer =
-      representative?.answer &&
-      typeof representative.answer === "object" &&
-      !Array.isArray(representative.answer)
-        ? representative.answer as Record<string, unknown>
-        : {};
-
-    setActiveGroup(group);
-    setIsRepresentative(Boolean(me?.is_representative));
-
-    // IMPORTANT: the representative's answer is the group's answer.
-    // This keeps every phone in the same group synchronized, not just the
-    // representative's own browser.
-    setFirstChoice(
-      typeof representativeAnswer.round1 === "string"
-        ? representativeAnswer.round1
-        : null
-    );
-    setSecondChoice(
-      typeof representativeAnswer.round2 === "string"
-        ? representativeAnswer.round2
-        : null
-    );
-
+    setActiveGroup(group ?? null);
+    setIsRepresentative(Boolean(data?.is_representative));
     setGroupLoaded(true);
   }
 
@@ -250,7 +219,7 @@ useEffect(() => {
     const loadChoices = async () => {
       const { data, error } = await client
         .from("experiment_participants")
-        .select("group_name, answer, is_representative")
+        .select("group_name, answer")
         .eq("session_id", session.sessionId);
       if (error) { console.error("FAILED TO LOAD SOCIAL REVEAL:", error); return; }
       if (cancelled) return;
@@ -259,7 +228,7 @@ useEffect(() => {
         const key = typeof row.group_name === "string" ? row.group_name.toLowerCase() : "";
         const id = key.includes("women") ? "women" : key.includes("old testament") ? "ot" : key.includes("new testament") ? "nt" : key.includes("12 disciples") || key.includes("the 12 disciples") ? "disciples" : null;
         const answer = row.answer && typeof row.answer === "object" && !Array.isArray(row.answer) ? row.answer as Record<string, unknown> : {};
-        if (id && row.is_representative && typeof answer.round1 === "string") map[id] = answer.round1;
+        if (id && typeof answer.round1 === "string") map[id] = answer.round1;
       }
       setGroupChoices(map);
     };
@@ -409,20 +378,11 @@ const chooseRoundTwo = async (name: string) => {
     console.error("FAILED TO VERIFY SOCIAL REPRESENTATIVE:", error);
     return;
   }
-  const rawGroup = String(currentParticipant?.group_name ?? "").trim().toLowerCase();
-  const group: GroupId | null =
-    rawGroup === "women" || rawGroup === "women of the bible" ? "women" :
-    rawGroup === "ot" || rawGroup === "old testament leaders" ? "ot" :
-    rawGroup === "nt" || rawGroup === "new testament important members" ? "nt" :
-    rawGroup === "disciples" || rawGroup === "the 12 disciples" ? "disciples" : null;
-
-  if (!currentParticipant?.is_representative || !group) {
-    setActiveGroup(group);
+  if (!currentParticipant?.is_representative) {
     setIsRepresentative(false);
     return;
   }
 
-  setActiveGroup(group);
   setIsRepresentative(true);
   setSecondChoice(name);
   const saved = await submitAnswer({ round: 2, choice: name });
@@ -580,19 +540,27 @@ const chooseRoundTwo = async (name: string) => {
                       disabled={!canSubmit}
   className="group overflow-hidden border border-[#19352c]/12 bg-[#eee5d5]/35 text-left transition-all hover:-translate-y-1 hover:border-[#c7542b]/45 hover:bg-[#f8f1e6]"
 >
-  <div className="overflow-hidden bg-[#e7ddcc]">
-    <img
-      src={character.image}
-      alt={character.name}
-      className="block w-full h-auto transition-transform duration-500 group-hover:scale-[1.02]"
-    />
+<div className="relative h-[240px] w-full overflow-hidden sm:h-[260px] lg:h-[280px]">
+  <img
+  src={character.image}
+  alt={character.name}
+  className="absolute inset-0 h-full w-full object-cover object-[center_25%]"
+/>
+  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#10231d]/90 via-[#10231d]/10 to-transparent" />
+  <div className="pointer-events-none absolute inset-x-0 bottom-0 p-4 text-[#fff8ed]">
+    <p className="font-mono text-[9px] uppercase tracking-[0.24em] text-[#f0c5a8]">
+      Biblical character
+    </p>
+    <p className="mt-1 font-serif text-2xl leading-tight">{character.name}</p>
   </div>
+</div>
+
                       <div className="p-5">
                         <p className="font-mono text-[7px] uppercase tracking-[0.18em] text-[#19352c]/35">
                           Character {String(index + 1).padStart(2, "0")}
                         </p>
 
-                        <h3 className="mt-2 font-serif text-2xl">
+                        <h3 className="mt-2 font-serif text-2xl sm:hidden">
                           {character.name}
                         </h3>
 
@@ -785,13 +753,22 @@ const chooseRoundTwo = async (name: string) => {
                           : "border-[#19352c]/12 bg-[#eee5d5]/35 hover:border-[#c7542b]/45 hover:bg-[#f8f1e6]"
                       }`}
                     >
-                      <div className="overflow-hidden bg-[#e7ddcc]">
-                     <img
-                     src={character.image}
-                    alt={character.name}
-                    className="block w-full h-auto"
-                    />
-                    </div>
+                      
+<div className="relative h-[240px] w-full overflow-hidden bg-[#e7ddcc] sm:h-[260px] lg:h-[280px]">
+  <img
+  src={character.image}
+  alt={character.name}
+  className="absolute inset-0 h-full w-full object-cover object-[center_25%]"
+/>
+  {/* Keep your existing gradient and character-name overlay here */}
+  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#10231d]/90 via-[#10231d]/10 to-transparent" />
+  <div className="pointer-events-none absolute inset-x-0 bottom-0 p-4 text-[#fff8ed]">
+    <p className="font-mono text-[9px] uppercase tracking-[0.24em] text-[#f0c5a8]">
+      Biblical character
+    </p>
+    <p className="mt-1 font-serif text-2xl leading-tight">{character.name}</p>
+  </div>
+</div>
 
                       <div className="p-5">
                         {character.name === firstChoice && (
@@ -800,7 +777,7 @@ const chooseRoundTwo = async (name: string) => {
                           </p>
                         )}
 
-                        <h3 className="mt-2 font-serif text-2xl">
+                        <h3 className="mt-2 font-serif text-2xl sm:hidden">
                           {character.name}
                         </h3>
 
