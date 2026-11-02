@@ -7,6 +7,12 @@ export type ExperimentStage =
   | "START"
   | "QUESTION"
   | "WAIT"
+  | "QUESTION_1"
+  | "WAIT_1"
+  | "REVEAL_1"
+  | "QUESTION_2"
+  | "WAIT_2"
+  | "REVEAL_2"
   | "REVEAL"
   | "DISCUSSION"
   | "COMPLETE";

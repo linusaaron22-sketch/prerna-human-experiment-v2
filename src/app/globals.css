@@ -66,3 +66,113 @@ body {
   filter: blur(1px);
   transform-origin: top;
 }
+
+/* =========================================
+   ARISE EXPERIENCE 01 — EDITORIAL DESIGN
+========================================= */
+
+.experience-paper {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background-color: #f5eddf;
+  background-image:
+    radial-gradient(ellipse at 8% 15%, rgba(199, 84, 43, 0.055), transparent 30%),
+    radial-gradient(ellipse at 92% 85%, rgba(25, 53, 44, 0.055), transparent 32%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(95, 75, 48, 0.018) 0px,
+      rgba(95, 75, 48, 0.018) 1px,
+      transparent 1px,
+      transparent 4px
+    );
+}
+
+.experience-paper::before,
+.experience-paper::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 340px;
+  height: 340px;
+  border: 1px solid rgba(199, 84, 43, 0.09);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.experience-paper::before {
+  top: -230px;
+  left: -160px;
+  box-shadow:
+    25px 25px 0 rgba(199, 84, 43, 0.025),
+    50px 50px 0 rgba(199, 84, 43, 0.025);
+}
+
+.experience-paper::after {
+  right: -220px;
+  bottom: -230px;
+  box-shadow:
+    -25px -25px 0 rgba(25, 53, 44, 0.025),
+    -50px -50px 0 rgba(25, 53, 44, 0.025);
+}
+
+.experience-paper .editorial-heading {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.experience-paper .editorial-label {
+  font-family: var(--font-sans), sans-serif;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+/* Experience 01 — illustrated Bible animations */
+@keyframes bible-float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
+@keyframes bible-page-turn {
+  0%, 100% {
+    transform: rotateY(0deg) scaleX(1);
+  }
+  50% {
+    transform: rotateY(-13deg) scaleX(.96);
+  }
+}
+
+@keyframes bible-branch-sway {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(2deg);
+  }
+}
+
+.animate-bible-float {
+  animation: bible-float 5s ease-in-out infinite;
+}
+
+.animate-bible-page {
+  animation: bible-page-turn 4s ease-in-out infinite;
+}
+
+.animate-bible-branch {
+  transform-origin: bottom center;
+  animation: bible-branch-sway 6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-bible-float,
+  .animate-bible-page,
+  .animate-bible-branch {
+    animation: none;
+  }
+}

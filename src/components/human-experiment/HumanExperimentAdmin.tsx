@@ -73,14 +73,17 @@ type Participant = {
 const EXPERIMENTS: Experiment[] = [
   {
     id: 1,
-    title: "PERCEPTION",
+    title: "BEYOND THE HABIT",
     type: "INDIVIDUAL",
     stages: [
       "INTRO",
       "START",
-      "QUESTION",
-      "WAIT",
-      "REVEAL",
+      "QUESTION_1",
+      "WAIT_1",
+      "REVEAL_1",
+      "QUESTION_2",
+      "WAIT_2",
+      "REVEAL_2",
       "DISCUSSION",
       "COMPLETE",
     ],
@@ -395,7 +398,7 @@ const {
 } = await supabase.auth.getUser();
 
 if (!user) {
-  window.location.href = "/admin/login";
+  window.location.href = "/human-experiment/admin/login";
   return;
 }
     const savedSessionId = window.localStorage.getItem(
@@ -461,8 +464,41 @@ setSessionState(toLocalSession(created));
   };
 }, []);
   const [showProjector, setShowProjector] = useState(false);
-  const [revealGroups, setRevealGroups] = useState(false);
+const [revealGroups, setRevealGroups] = useState(false);
+const [revealBibleResults, setRevealBibleResults] = useState(false);
   const stage = experiment.stages[stageIndex];
+    const getBibleRoundStats = (round: "round1" | "round2") => {
+    const counts = { A: 0, B: 0, C: 0, D: 0 };
+
+    participants.forEach((participant) => {
+      const answer = participant.answer;
+
+      if (!answer || typeof answer !== "object") return;
+
+      const data = answer as Record<string, unknown>;
+
+      if (data.experiment !== 1) return;
+
+      const choice = data[round];
+
+      if (
+        typeof choice === "string" &&
+        Object.prototype.hasOwnProperty.call(counts, choice)
+      ) {
+        counts[choice as keyof typeof counts] += 1;
+      }
+    });
+
+    const total = Object.values(counts).reduce(
+      (sum, count) => sum + count,
+      0
+    );
+
+    return { counts, total };
+  };
+
+  const round1Stats = getBibleRoundStats("round1");
+  const round2Stats = getBibleRoundStats("round2");
 
   const answeredCount = participants.filter(
     (participant) => participant.status === "ANSWERED"
@@ -599,6 +635,7 @@ setSessionState(toLocalSession(created));
   setTimerRunning(false);
 }
     async function nextStage() {
+      setRevealBibleResults(false);
     if (!supabaseSession) return;
 
     if (stageIndex >= experiment.stages.length - 1) {
@@ -627,6 +664,7 @@ setSessionState(toLocalSession(created));
   }
 
   async function previousStage() {
+    setRevealBibleResults(false);
     if (!supabaseSession) return;
 
     if (stageIndex <= 0) return;
@@ -937,11 +975,12 @@ return (
     }
   );
 
-  if (updated) {
+    if (updated) {
     setSupabaseSession(updated);
-    setSessionState(toLocalSession(updated)); 
+    setSessionState(toLocalSession(updated));
   }
 
+  setRevealBibleResults(false);
   setTimerRunning(false);
 }}
                               className="group flex items-center gap-2"
@@ -1099,13 +1138,19 @@ return (
                : "Lock Current"}  
                 </button>
                     {String(stage).startsWith("REVEAL") && (
-                      <button
-                        onClick={() => setRevealGroups(true)}
-                        className="bg-[#c7542b] px-4 py-3 font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-[#f8f1e6]"
-                      >
-                        Trigger Reveal
-                      </button>
-                    )}
+  <button
+    onClick={() => {
+      if (experiment.id === 1) {
+        setRevealBibleResults(true);
+      } else if (experiment.id === 3) {
+        setRevealGroups(true);
+      }
+    }}
+    className="bg-[#c7542b] px-4 py-3 font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-[#f8f1e6]"
+  >
+    {experiment.id === 1 ? "Reveal Results" : "Trigger Reveal"}
+  </button>
+)}
 
                     {stage === "COMPLETE" && (
                       <button
@@ -1412,6 +1457,128 @@ return (
                   ))}
                 </div>
               </div>
+            )}
+          
+            {/* =================================================
+                BEYOND THE HABIT - RESULTS DASHBOARD
+            ================================================== */}
+
+            {experiment.id === 1 && revealBibleResults && (
+              <section className="mt-7 border border-[#19352c]/15">
+                <div className="border-b border-[#19352c]/10 bg-[#19352c] px-5 py-5 text-[#f8f1e6]">
+                  <p className="font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-[#c7542b]">
+                    ARISE 2026 · HUMAN EXPERIMENT 01
+                  </p>
+                  <h3 className="mt-2 font-serif text-3xl">
+                    Beyond the Habit
+                  </h3>
+                  <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.12em] text-[#f8f1e6]/50">
+                    Anonymous participant response analysis
+                  </p>
+                </div>
+
+                <div className="grid gap-px bg-[#19352c]/10 md:grid-cols-2">
+                  {[
+                    {
+                      title: "ROUND 01",
+                      subtitle: "The Busy Day",
+                      stats: round1Stats,
+                      options: [
+                        { key: "A" as const, label: "Adjust my schedule and make time for it." },
+                        { key: "B" as const, label: "Read before going to sleep." },
+                        { key: "C" as const, label: "Skip today and continue tomorrow." },
+                        { key: "D" as const, label: "Forget about it and move on." },
+                      ],
+                    },
+                    {
+                      title: "ROUND 02",
+                      subtitle: "Mechanical Reading",
+                      stats: round2Stats,
+                      options: [
+                        { key: "A" as const, label: "Continue reading just to maintain my routine." },
+                        { key: "B" as const, label: "Slow down and read a smaller portion." },
+                        { key: "C" as const, label: "Reflect on the passage and apply it." },
+                        { key: "D" as const, label: "Seek help to understand what I am reading." },
+                      ],
+                    },
+                  ].map((round) => (
+                    <div key={round.title} className="bg-[#f8f1e6] p-5 sm:p-7">
+                      <div className="flex items-end justify-between gap-3 border-b border-[#19352c]/10 pb-4">
+                        <div>
+                          <p className="font-mono text-[8px] font-bold uppercase tracking-[0.16em] text-[#c7542b]">
+                            {round.title}
+                          </p>
+                          <h4 className="mt-1 font-serif text-xl">
+                            {round.subtitle}
+                          </h4>
+                        </div>
+
+                        <div className="text-right">
+                          <p className="font-serif text-3xl">
+                            {round.stats.total}
+                          </p>
+                          <p className="font-mono text-[7px] uppercase tracking-[0.12em] text-[#19352c]/45">
+                            Responses
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 space-y-5">
+                        {round.options.map((option) => {
+                          const count = round.stats.counts[option.key];
+                          const percentage = round.stats.total
+                            ? Math.round((count / round.stats.total) * 100)
+                            : 0;
+
+                          return (
+                            <div key={option.key}>
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex min-w-0 gap-3">
+                                  <span className="flex h-7 w-7 shrink-0 items-center justify-center border border-[#c7542b]/30 font-mono text-[9px] font-bold text-[#c7542b]">
+                                    {option.key}
+                                  </span>
+                                  <p className="pt-1 text-xs leading-relaxed text-[#19352c]/80">
+                                    {option.label}
+                                  </p>
+                                </div>
+
+                                <div className="shrink-0 text-right">
+                                  <p className="font-mono text-sm font-bold">
+                                    {count}
+                                  </p>
+                                  <p className="font-mono text-[8px] text-[#19352c]/45">
+                                    {percentage}%
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="ml-10 mt-2 h-1.5 bg-[#19352c]/10">
+                                <div
+                                  className="h-full bg-[#c7542b] transition-all duration-500"
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {round.stats.total === 0 && (
+                        <p className="mt-5 font-mono text-[8px] uppercase tracking-[0.12em] text-[#19352c]/40">
+                          No responses recorded yet.
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t border-[#19352c]/10 bg-[#eee5d5] px-5 py-4">
+                  <p className="font-mono text-[8px] leading-relaxed text-[#19352c]/50">
+                    RESULTS ARE ANONYMOUS · EACH ROUND IS CALCULATED
+                    INDEPENDENTLY · PERCENTAGES ARE BASED ON VALID RESPONSES
+                  </p>
+                </div>
+              </section>
             )}
 
             {/* =================================================

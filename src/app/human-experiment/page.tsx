@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import ExperimentHero from "@/components/human-experiment/ExperimentHero";
 
 import PerceptionExperiment from "@/components/human-experiment/PerceptionExperiment";
+import BibleReadingExperience from "@/components/human-experiment/BibleReadingExperience";
 import CommitmentExperiment from "@/components/human-experiment/ChoiceExperiment";
 import SocialInfluenceExperiment from "@/components/human-experiment/SocialInfluenceExperiment";
 import MemoryExperiment from "@/components/human-experiment/MemoryExperiment";
@@ -488,7 +489,7 @@ const roomCode: string = savedRoomCode;
 
   switch (session.experiment) {
     case 1:
-      return <PerceptionExperiment />;
+    return <BibleReadingExperience />;
 
     case 2:
       return <CommitmentExperiment />;

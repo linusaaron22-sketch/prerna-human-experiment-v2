@@ -15,7 +15,7 @@ export default function AdminLoginPage() {
     async function checkSession() {
       if (!supabase || !isSupabaseConfigured) return;
       const { data } = await supabase.auth.getSession();
-      if (data.session) router.replace("/admin");
+      if (data.session) router.replace("/admin/experiment");
     }
     checkSession();
   }, [router]);
