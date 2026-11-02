@@ -18,8 +18,9 @@ const devanagari = Noto_Sans_Devanagari({
 });
 
 export const metadata: Metadata = {
-  title: "Arise Offical",
-  description: "Registration Website"
+  title: "Prerna Human Experiment",
+  description:
+    "An interactive human experiment exploring how people think, perceive, choose, remember, and respond."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
