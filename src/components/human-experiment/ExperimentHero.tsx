@@ -65,7 +65,8 @@ export default function ExperimentHero({
   onEnter: () => void;
 }) {
   const [passStarted, setPassStarted] = useState(false);
-  const [participantId, setParticipantId] = useState("HE-001");
+const [participantId, setParticipantId] = useState("HE-001");
+const [profileUrl, setProfileUrl] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -85,9 +86,10 @@ export default function ExperimentHero({
       "arise-human-experiment-participant",
       normalizedParticipant
     );
+    setProfileUrl(
+  `${window.location.origin}/r/${encodeURIComponent(normalizedParticipant)}`
+);
   }, []);
-
-  const profileUrl = `https://arise-human-experiment.netlify.app/human/${participantId}`;
 
   const handleEnter = () => {
     setPassStarted(true);
@@ -341,14 +343,18 @@ export default function ExperimentHero({
 
                   <div className="rounded-lg bg-[#f8f1e6] p-2.5 sm:rounded-xl sm:p-3">
 
-                    <QRCodeSVG
-                      value={profileUrl}
-                      size={130}
-                      className="h-[130px] w-[130px] sm:h-[175px] sm:w-[175px]"
-                      bgColor="#f8f1e6"
-                      fgColor="#19352c"
-                      level="H"
-                    />
+                    {profileUrl ? (
+  <QRCodeSVG
+    value={profileUrl}
+    size={130}
+    className="h-[130px] w-[130px] sm:h-[175px] sm:w-[175px]"
+    bgColor="#f8f1e6"
+    fgColor="#19352c"
+    level="H"
+  />
+) : (
+  <div className="h-[130px] w-[130px] sm:h-[175px] sm:w-[175px]" />
+)}
 
                   </div>
 
