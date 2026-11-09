@@ -9,12 +9,14 @@ export async function POST(request: NextRequest) {
   try {
     // Require a same-origin request.
     const origin = request.headers.get("origin");
-    if (!origin || origin !== new URL(request.url).origin) {
-      return NextResponse.json(
-        { error: "Invalid request origin." },
-        { status: 403 }
-      );
-    }
+const allowedOrigin = process.env.NEXT_PUBLIC_SITE_URL;
+
+if (!origin || !allowedOrigin || origin !== allowedOrigin) {
+  return NextResponse.json(
+    { error: "Invalid request origin." },
+    { status: 403 }
+  );
+}
 
     // Derive identity from the validated HttpOnly pass cookie.
     const participant = await getAuthenticatedParticipant();
