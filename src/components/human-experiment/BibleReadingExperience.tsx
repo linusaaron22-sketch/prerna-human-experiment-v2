@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useHumanExperimentSession } from "@/lib/human-experiment/useHumanExperimentSession";
-import { supabase } from "@/lib/supabase";
 
 type Language = "en" | "hi";
 type Round = 1 | 2;
@@ -191,7 +190,6 @@ export default function BibleReadingExperience({
   useState<PreviewStage>("INTRO");
 
   const [language, setLanguage] = useState<Language>("en");
-  const [participantKey, setParticipantKey] = useState("");
   const [answers, setAnswers] = useState<Record<Round, Choice | null>>({
     1: null,
     2: null,
@@ -210,13 +208,50 @@ const [resultsError, setResultsError] = useState("");
   const t = content[language];
   const isLocked = !previewMode && session.status === "PAUSED";
 
+  // Load this participant's own saved answers through the authenticated API.
   useEffect(() => {
-    const key = window.localStorage.getItem(
-      "arise-human-experiment-participant"
-    );
+    if (previewMode || !session.sessionId) return;
 
-    if (key) setParticipantKey(key);
-  }, []);
+    let cancelled = false;
+
+    async function loadSavedAnswers() {
+      try {
+        const params = new URLSearchParams({
+          sessionId: session.sessionId!,
+          experience: "1",
+        });
+        const response = await fetch(`/api/participant/answers?${params}`, {
+          method: "GET",
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || "Could not load saved answers.");
+        }
+
+        if (cancelled) return;
+
+        setAnswers({
+          1: ["A", "B", "C", "D"].includes(result.answer?.round1)
+            ? result.answer.round1
+            : null,
+          2: ["A", "B", "C", "D"].includes(result.answer?.round2)
+            ? result.answer.round2
+            : null,
+        });
+      } catch (err) {
+        console.error("EXPERIENCE 01 ANSWER LOAD FAILED:", err);
+      }
+    }
+
+    void loadSavedAnswers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [previewMode, session.sessionId]);
 
 
 
@@ -259,54 +294,30 @@ useEffect(() => {
     return;
   }
 
-    if (!supabase || !participantKey) {
-      setError(t.saveError);
-      return;
-    }
-
     if (isLocked || saving) return;
 
     setSaving(true);
     setError("");
 
     try {
-      const { data: existing, error: readError } = await supabase
-        .from("experiment_participants")
-        .select("answer")
-        .eq("session_id", session.sessionId)
-        .eq("participant_key", participantKey)
-        .maybeSingle();
+      const response = await fetch("/api/participant/answers", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: session.sessionId,
+          experience: 1,
+          patch: round === 1
+            ? { round1: currentAnswer }
+            : { round2: currentAnswer },
+          markComplete: true,
+        }),
+      });
 
-      if (readError) throw readError;
-
-      const previousAnswer =
-        existing?.answer &&
-        typeof existing.answer === "object" &&
-        !Array.isArray(existing.answer)
-          ? (existing.answer as Record<string, unknown>)
-          : {};
-
-      const updatedAnswer = {
-        ...previousAnswer,
-        experiment: 1,
-        ...(round === 1
-          ? { round1: currentAnswer }
-          : { round2: currentAnswer }),
-      };
-
-      const { error: updateError } = await supabase
-        .from("experiment_participants")
-        .update({
-          answer: updatedAnswer,
-          status: "ANSWERED",
-          submitted_at: new Date().toISOString(),
-          connected: true,
-          current_experiment: 1,
-        })
-        .eq("session_id", session.sessionId)
-        .eq("participant_key", participantKey);
-
-      if (updateError) throw updateError;
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Answer save failed.");
+      }
     } catch (err) {
       console.error("EXPERIENCE 01 ANSWER SAVE FAILED:", err);
       setError(t.saveError);
@@ -334,70 +345,55 @@ useEffect(() => {
   const waitStage = stage === "WAIT_1" || stage === "WAIT_2";
   const revealStage = stage === "REVEAL_1" || stage === "REVEAL_2";
   useEffect(() => {
-  if (previewMode || !revealStage || !session.sessionId || !round) {
-    setRevealResults(null);
-    return;
-  }
-
-  let cancelled = false;
-
-  async function loadRevealResults() {
-    if (!supabase) {
-      setResultsError("Unable to connect to the results.");
-      return;
-    }
-
-    setResultsLoading(true);
-    setResultsError("");
-
-    const answerField = round === 1 ? "round1" : "round2";
-
-    const { data, error } = await supabase
-      .from("experiment_participants")
-      .select("answer")
-      .eq("session_id", session.sessionId);
-
-    if (cancelled) return;
-
-    if (error) {
-      console.error("Failed to load reveal results:", error);
-      setResultsError("Results could not be loaded. Please contact the facilitator.");
+    if (previewMode || !revealStage || !session.sessionId || !round) {
       setRevealResults(null);
-      setResultsLoading(false);
+      setResultsError("");
       return;
     }
 
-    const counts = { A: 0, B: 0, C: 0, D: 0 };
+    let cancelled = false;
 
-    (data || []).forEach((participant) => {
-      const answer = participant.answer;
+    async function loadRevealResults() {
+      setResultsLoading(true);
+      setResultsError("");
 
-      if (!answer || typeof answer !== "object" || Array.isArray(answer)) return;
+      try {
+        const params = new URLSearchParams({
+          sessionId: session.sessionId!,
+          experience: "1",
+          round: String(round),
+        });
+        const response = await fetch(`/api/participant/results?${params}`, {
+          method: "GET",
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        const result = await response.json();
 
-      const answerData = answer as Record<string, unknown>;
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || "Results could not be loaded.");
+        }
 
-      if (answerData.experiment !== 1) return;
+        if (cancelled) return;
 
-      const choice = answerData[answerField];
-
-      if (
-        typeof choice === "string" &&
-        Object.prototype.hasOwnProperty.call(counts, choice)
-      ) {
-        counts[choice as keyof typeof counts] += 1;
+        setRevealResults(result.counts);
+      } catch (err) {
+        console.error("Failed to load reveal results:", err);
+        if (!cancelled) {
+          setResultsError("Results could not be loaded. Please contact the facilitator.");
+          setRevealResults(null);
+        }
+      } finally {
+        if (!cancelled) setResultsLoading(false);
       }
-    });
+    }
 
-    setRevealResults(counts);
-    setResultsLoading(false);
-  }
+    void loadRevealResults();
 
-  void loadRevealResults();
-
-  return () => {
-    cancelled = true;
-  };
-}, [previewMode, revealStage, round, session.sessionId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [previewMode, revealStage, round, session.sessionId]);
   const discussionStage = stage === "DISCUSSION";
   const completeStage = stage === "COMPLETE";
 
@@ -501,7 +497,7 @@ useEffect(() => {
                     {t.waitingDescription}
                   </p>
                 </div>
-          
+
                 {previewMode && (
   <button
     onClick={() => setPreviewStage("QUESTION_1")}
@@ -509,11 +505,11 @@ useEffect(() => {
   >
     Start Preview <ArrowRight className="ml-2 inline h-4 w-4" />
   </button>
-)}            
+)}
               </motion.div>
             )}
 
-           
+
             {/* QUESTION ROUNDS */}
             {questionStage && round && (
               <motion.div
@@ -574,7 +570,7 @@ useEffect(() => {
     </p>
   </div>
 
-  
+
 {/* Right: Animated illustrated Bible */}
 <div className="relative mx-auto flex aspect-square w-full max-w-[320px] shrink-0 items-center justify-center overflow-hidden bg-[#eee5d5]">
 
@@ -775,7 +771,7 @@ useEffect(() => {
   </div>
 </div>
 </div>
-  
+
 {/* Photographic answer cards */}
 <div className="relative mt-10 sm:mt-12">
   <div className="mb-5 flex items-center justify-between">
