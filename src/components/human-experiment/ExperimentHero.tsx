@@ -17,46 +17,39 @@ import { useEffect, useState } from "react";
 const experiments = [
   {
     number: "01",
-    title: "PERCEPTION",
+    title: "Beyond the Habit",
     description: "See beyond what you think.",
     icon: Eye,
     status: "current",
   },
   {
     number: "02",
-    title: "COMMITMENT",
+    title: "The Empty Chair",
     description: "Why we keep going.",
     icon: Target,
     status: "locked",
   },
   {
     number: "03",
-    title: "SOCIAL INFLUENCE",
+    title: "The Sunday Choice",
     description: "Others influence you more than you think.",
     icon: Users,
     status: "locked",
   },
   {
     number: "04",
-    title: "MEMORY",
+    title: "The Quiet Connection",
     description: "Your memory isn't perfect.",
     icon: MemoryStick,
     status: "locked",
   },
   {
     number: "05",
-    title: "ATTENTION",
+    title: "The Living Church",
     description: "Where focus goes, energy flows.",
     icon: Brain,
     status: "locked",
-  },
-  {
-    number: "06",
-    title: "REFLECTION",
-    description: "What will you take away?",
-    icon: Sparkles,
-    status: "locked",
-  },
+  }
 ];
 
 export default function ExperimentHero({
@@ -64,7 +57,7 @@ export default function ExperimentHero({
 }: {
   onEnter: () => void;
 }) {
-  const [passStarted, setPassStarted] = useState(false);
+const [passStarted, setPassStarted] = useState(false);
 const [participantId, setParticipantId] = useState("HE-001");
 const [profileUrl, setProfileUrl] = useState("");
 
@@ -111,16 +104,13 @@ const [profileUrl, setProfileUrl] = useState("");
 
           <div>
             <div className="font-sans text-lg font-semibold tracking-[0.22em] sm:text-xl">
-              ARISE
+              PRERNA
             </div>
 
             <div className="mt-1 text-[7px] uppercase tracking-[0.28em] text-[#19352c]/55 sm:text-[9px]">
               × Human Experiment
             </div>
 
-            <div className="mt-1 text-[6px] uppercase tracking-[0.25em] text-[#19352c]/35 sm:text-[8px]">
-              A Study in Human Behaviour
-            </div>
           </div>
 
           <div className="text-right">

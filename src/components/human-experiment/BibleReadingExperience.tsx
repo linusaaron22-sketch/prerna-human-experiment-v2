@@ -408,26 +408,26 @@ useEffect(() => {
         {/* HEADER */}
         <header className="flex items-start justify-between border-b border-[#19352c]/15 pb-5">
           <div>
-            <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-[#c7542b]">
-              ARISE / 2026
+            <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-[#c7542b]">
+              Prerna / 2026
             </p>
 
             <h1 className="mt-2 font-serif text-2xl tracking-wide sm:text-3xl">
               HUMAN EXPERIMENT
             </h1>
 
-            <p className="mt-1 font-mono text-[7px] uppercase tracking-[0.25em] text-[#19352c]/45 sm:text-[8px]">
-              Human Behaviour Lab
+            <p className="mt-1 font-mono text-[7px] uppercase tracking-[0.25em] text-[#000000] sm:text-[11px]">
+              The Living Church
             </p>
           </div>
 
           <div className="flex flex-col items-end gap-3">
             <div className="text-right">
-              <p className="font-mono text-[7px] uppercase tracking-[0.2em] text-[#19352c]/40">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#000000]">
                 {t.label}
               </p>
               <p className="mt-1 font-mono text-sm font-bold text-[#c7542b]">
-                01 / 06
+                01 / 05
               </p>
             </div>
 

@@ -7,22 +7,15 @@ import ExperimentHero from "@/components/human-experiment/ExperimentHero";
 import PerceptionExperiment from "@/components/human-experiment/PerceptionExperiment";
 import BibleReadingExperience from "@/components/human-experiment/BibleReadingExperience";
 import CommitmentExperiment from "@/components/human-experiment/ChoiceExperiment";
-import SocialInfluenceExperiment from "@/components/human-experiment/SocialInfluenceExperiment";
-import MemoryExperiment from "@/components/human-experiment/MemoryExperiment";
-import AttentionExperiment from "@/components/human-experiment/AttentionExperiment";
-import ReflectionExperiment from "@/components/human-experiment/ReflectionExperiment";
+import WorkingOnSundaysExperiment from "@/components/human-experiment/WorkingOnSundaysExperiment";
+import PersonalPrayerExperience from "@/components/human-experiment/PersonalPrayerExperience";
+import LivingChurchReflection from "@/components/human-experiment/LivingChurchReflection";
+
 
 import {
   DEFAULT_SESSION,
   type HumanExperimentSession,
 } from "@/lib/human-experiment/session";
-
-import {
-  getExperimentSession,
-  subscribeToExperimentSession,
-} from "@/lib/human-experiment/supabaseSession";
-
-import { supabase } from "@/lib/supabase";
 
 
 export default function HumanExperimentPage() {
@@ -35,6 +28,47 @@ export default function HumanExperimentPage() {
   const [joinError, setJoinError] = useState("");
 
   const [showHero, setShowHero] = useState(true);
+const [accessStatus, setAccessStatus] = useState<
+  "checking" | "valid" | "invalid" | "none"
+>("checking");
+
+const verifyPassAgain = async (): Promise<boolean> => {
+  try {
+    const response = await fetch("/api/participant/auth", {
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+
+
+      const result = await response.json();
+
+      if (
+        !response.ok ||
+        !result.success ||
+        !result.participantKey
+      ) {
+        window.localStorage.removeItem(
+          "arise-human-experiment-participant"
+        );
+        window.localStorage.removeItem(
+          "prerna-participant-pass-token"
+        );
+        window.localStorage.removeItem(
+          "arise-human-experiment-room"
+        );
+
+        setAccessStatus("invalid");
+        setJoined(false);
+        return false;
+      }
+
+      return true;
+    } catch {
+      setJoinError("Could not verify your pass. Please try again.");
+      return false;
+    }
+  };
 
   const [profileComplete, setProfileComplete] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -46,83 +80,116 @@ export default function HumanExperimentPage() {
   // ---------------------------------------------------------
   // READ PARTICIPANT + ROOM
   // ---------------------------------------------------------
-
 useEffect(() => {
-  const params = new URLSearchParams(window.location.search);
+  let cancelled = false;
 
-  const participant = params.get("participant");
-  const room = params.get("room");
-  const step = params.get("step");
+  async function verifyParticipantAccess() {
+    try {
+      const response = await fetch("/api/participant/auth", {
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
+      });
 
-  // A QR scan should identify the participant only. Never reuse a
-  // previously saved room code to skip the introduction or room entry.
-  if (participant) {
-    const normalizedParticipant = participant.toUpperCase();
-    window.localStorage.setItem(
-      "arise-human-experiment-participant",
-      normalizedParticipant
-    );
+      const result = await response.json();
+
+      if (cancelled) return;
+
+      if (!response.ok || !result.success || !result.participantKey) {
+        window.localStorage.removeItem(
+          "arise-human-experiment-participant"
+        );
+        window.localStorage.removeItem(
+          "arise-human-experiment-room"
+        );
+
+        setAccessStatus("invalid");
+        return;
+      }
+
+      const participantKey = String(result.participantKey);
+
+      // Temporary UI compatibility only.
+      // This ID must never be trusted by server APIs for authorization.
+      window.localStorage.setItem(
+        "arise-human-experiment-participant",
+        participantKey
+      );
+
+      setAccessStatus("valid");
+
+      const params = new URLSearchParams(window.location.search);
+      const room = params.get("room");
+      const step = params.get("step");
+
+      if (room && step === "profile") {
+        setRoomCode(room);
+        setJoined(true);
+        setShowHero(false);
+
+        window.localStorage.setItem(
+          "arise-human-experiment-room",
+          room
+        );
+      } else {
+        window.localStorage.removeItem(
+          "arise-human-experiment-room"
+        );
+
+        setRoomCode("");
+        setJoined(false);
+        setShowHero(true);
+      }
+    } catch {
+      if (!cancelled) {
+        setAccessStatus("invalid");
+      }
+    }
   }
 
-  // Only the redirect performed after a successful manual room-code
-  // entry may restore the joined/profile step.
-  if (room && step === "profile") {
-    setRoomCode(room);
-    setJoined(true);
-    setShowHero(false);
-    window.localStorage.setItem("arise-human-experiment-room", room);
-  } else {
-    window.localStorage.removeItem("arise-human-experiment-room");
-    setRoomCode("");
-    setJoined(false);
-    setShowHero(true);
-  }
+  void verifyParticipantAccess();
+
+  return () => {
+    cancelled = true;
+  };
 }, []);
 
   // ---------------------------------------------------------
   // JOIN ROOM
   // ---------------------------------------------------------
 
-  const joinRoom = async () => {
-    const code = roomCode.trim();
+ const joinRoom = async () => {
+  const code = roomCode.trim();
 
-    if (!/^\d{6}$/.test(code)) {
-      setJoinError("Enter the 6-digit room code.");
+  if (!/^\d{6}$/.test(code)) {
+    setJoinError("Enter the 6-digit room code.");
+    return;
+  }
+
+  setJoining(true);
+  setJoinError("");
+
+  try {
+    const hasValidPass = await verifyPassAgain();
+
+    if (!hasValidPass) {
       return;
     }
 
-    const participant =
-      new URLSearchParams(window.location.search).get(
-        "participant"
-      ) ||
-      window.localStorage.getItem(
-        "arise-human-experiment-participant"
-      );
+    const response = await fetch("/api/participant/room", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      cache: "no-store",
+      body: JSON.stringify({ roomCode: code }),
+    });
 
-    if (!participant) {
-      setJoinError(
-        "Please scan your participant ID QR code first."
-      );
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      setJoinError(result.error || "Could not join this room.");
       return;
     }
-
-    setJoining(true);
-    setJoinError("");
-
-    const room = await getExperimentSession(code);
-
-    if (!room) {
-      setJoinError(
-        "Room not found. Check the code and try again."
-      );
-      setJoining(false);
-      return;
-    }
-
-    window.localStorage.setItem(
-      "arise-human-experiment-participant",
-      participant
-    );
 
     window.localStorage.setItem(
       "arise-human-experiment-room",
@@ -130,12 +197,15 @@ useEffect(() => {
     );
 
     window.location.href =
-      `/human-experiment?room=${encodeURIComponent(
-        code
-      )}&participant=${encodeURIComponent(
-        participant.toUpperCase()
-      )}&step=profile`;
-  };
+      `/human-experiment?room=${encodeURIComponent(code)}&step=profile`;
+  } catch (error) {
+    console.error("ROOM JOIN FAILED:", error);
+    setJoinError("Connection error. Please try again.");
+  } finally {
+    setJoining(false);
+  }
+};
+
 
   // ---------------------------------------------------------
   // LIVE SESSION
@@ -143,84 +213,82 @@ useEffect(() => {
 useEffect(() => {
   if (!joined) return;
 
-  const savedRoomCode = window.localStorage.getItem(
-  "arise-human-experiment-room"
-);
+  const savedRoomCode =
+  window.localStorage.getItem("arise-human-experiment-room") ?? "";
 
 if (!savedRoomCode) return;
 
-const roomCode: string = savedRoomCode;
-
   let cancelled = false;
-  let cleanup: (() => void) | undefined;
+  let loading = false;
 
   async function loadLiveSession() {
-  const liveSession = await getExperimentSession(roomCode); 
+    if (loading || cancelled) return
 
-    if (!liveSession || cancelled) return;
+    loading = true;
 
-    setSession({
-      experiment: liveSession.current_experiment,
-      stage: liveSession.current_stage,
-      timerStartedAt: liveSession.timer_started_at
-        ? new Date(liveSession.timer_started_at).getTime()
-        : null,
-      timerDuration: liveSession.timer_duration,
-      reveal: liveSession.reveal,
-      status: liveSession.status,
-      sessionId: liveSession.id,
-      roomCode: liveSession.room_code,
-    });
+    try {
+      const response = await fetch(
+        `/api/participant/session?roomCode=${encodeURIComponent(savedRoomCode)}`,
+        {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store",
+        }
+      );
 
-    cleanup = subscribeToExperimentSession(
-      liveSession.id,
-      (updated) => {
-        setSession({
-          experiment: updated.current_experiment,
-          stage: updated.current_stage,
-          timerStartedAt: updated.timer_started_at
-            ? new Date(updated.timer_started_at).getTime()
-            : null,
-          timerDuration: updated.timer_duration,
-          reveal: updated.reveal,
-          status: updated.status,
-          sessionId: updated.id,
-          roomCode: updated.room_code,
-        });
+      if (cancelled) return;
+
+      if (response.status === 401) {
+        setAccessStatus("invalid");
+        setJoined(false);
+        return;
       }
-    );
+
+      if (!response.ok) return;
+
+      const result = await response.json();
+
+      if (cancelled || !result.success || !result.session) return;
+
+      const liveSession = result.session;
+
+      setSession({
+        experiment: liveSession.current_experiment,
+        stage: liveSession.current_stage,
+        timerStartedAt: liveSession.timer_started_at
+          ? new Date(liveSession.timer_started_at).getTime()
+          : null,
+        timerDuration: liveSession.timer_duration,
+        reveal: liveSession.reveal,
+        status: liveSession.status,
+        sessionId: liveSession.id,
+        roomCode: liveSession.room_code,
+      });
+    } catch (error) {
+      console.error("PARTICIPANT SESSION REFRESH FAILED:", error);
+    } finally {
+      loading = false;
+    }
   }
 
   void loadLiveSession();
 
+  const intervalId = window.setInterval(() => {
+    void loadLiveSession();
+  }, 2000);
+
   return () => {
     cancelled = true;
-    cleanup?.();
+    window.clearInterval(intervalId);
   };
 }, [joined]);
+
+
   // ---------------------------------------------------------
   // SAVE PARTICIPANT PROFILE
   // ---------------------------------------------------------
 
  const saveProfile = async () => {
-  if (!supabase) {
-    setJoinError("Database connection unavailable.");
-    return;
-  }
-
-  const participantKey =
-    new URLSearchParams(window.location.search).get("participant") ||
-    window.localStorage.getItem(
-      "arise-human-experiment-participant"
-    );
-
-  if (!participantKey) {
-    setJoinError(
-      "Participant ID not found. Please scan your QR code again."
-    );
-    return;
-  }
-
   if (!fullName.trim()) {
     setJoinError("Please enter your name.");
     return;
@@ -243,7 +311,7 @@ const roomCode: string = savedRoomCode;
     return;
   }
 
-  if (!session.sessionId) {
+  if (!session.sessionId || !session.roomCode) {
     setJoinError("Session is not ready yet.");
     return;
   }
@@ -251,47 +319,76 @@ const roomCode: string = savedRoomCode;
   setSavingProfile(true);
   setJoinError("");
 
-  const { error } = await supabase
-    .from("experiment_participants")
-    .upsert(
-      {
-        session_id: session.sessionId,
-        participant_key: participantKey,
-        full_name: fullName.trim(),
-        display_name: fullName.trim(),
+  try {
+    const response = await fetch("/api/participant/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      cache: "no-store",
+      body: JSON.stringify({
+        sessionId: session.sessionId,
+        roomCode: session.roomCode,
+        fullName: fullName.trim(),
         congregation: congregation.trim(),
         age: numericAge,
-        connected: true,
-        status: "READY",
-        current_experiment: session.experiment,
-      },
-      {
-        onConflict: "participant_key",
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      if (response.status === 401) {
+        setJoinError("Your pass has expired or been revoked. Please scan it again.");
+      } else {
+        setJoinError(result.error || "Could not save your information.");
       }
-    );
+      return;
+    }
 
-  if (error) {
-    console.error(
-      "FAILED TO SAVE PARTICIPANT PROFILE:",
-      error
-    );
-
-    setJoinError(
-      "Could not save your information. Please try again."
-    );
-
+    setProfileComplete(true);
+  } catch (error) {
+    console.error("PARTICIPANT PROFILE REQUEST FAILED:", error);
+    setJoinError("Connection error. Please try again.");
+  } finally {
     setSavingProfile(false);
-    return;
+  }
+};
+
+  // ---------------------------------------------------------
+  // PARTICIPANT ACCESS CHECK
+  // ---------------------------------------------------------
+
+  if (accessStatus === "checking") {
+    return (
+      <main className="min-h-screen bg-[#f8f1e6] flex items-center justify-center px-6">
+        <div className="text-center text-[#19352c]">
+          <div className="mx-auto mb-5 h-9 w-9 animate-spin rounded-full border-2 border-[#19352c]/20 border-t-[#19352c]" />
+          <h1 className="font-serif text-2xl">
+            Verifying your pass
+          </h1>
+          <p className="mt-3 text-sm text-[#19352c]/60">
+            Please wait while we verify your participant access.
+          </p>
+        </div>
+      </main>
+    );
   }
 
-  console.log(
-    "PARTICIPANT PROFILE SAVED:",
-    participantKey
-  );
-
-  setProfileComplete(true);
-  setSavingProfile(false);
-};
+  if (accessStatus === "invalid") {
+    return (
+      <main className="min-h-screen bg-[#f8f1e6] flex items-center justify-center px-6">
+        <div className="max-w-md text-center text-[#19352c]">
+          <h1 className="font-serif text-3xl">
+            Pass unavailable
+          </h1>
+          <p className="mt-4 text-sm leading-relaxed text-[#19352c]/65">
+            Your participant pass is invalid or has been revoked.
+            Please contact the event administrator for assistance.
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   // ---------------------------------------------------------
   // HERO
@@ -494,19 +591,16 @@ const roomCode: string = savedRoomCode;
     case 2:
       return <CommitmentExperiment />;
 
-    case 3:
-      return <SocialInfluenceExperiment />;
+      case 3:
+    return <WorkingOnSundaysExperiment />;
 
     case 4:
-      return <MemoryExperiment />;
+      return <PersonalPrayerExperience />;
 
     case 5:
-      return <AttentionExperiment />;
-
-    case 6:
-      return <ReflectionExperiment />;
+      return <LivingChurchReflection />;
 
     default:
-      return <ReflectionExperiment />;
+      return <LivingChurchReflection />;
   }
 }

@@ -93,21 +93,45 @@ const EXPERIMENTS: Experiment[] = [
     title: "COMMITMENT",
     type: "INDIVIDUAL",
     stages: [
-      "INTRO",
-      "START",
-      "QUESTION_1",
-      "WAIT_1",
-      "QUESTION_2",
-      "WAIT_2",
-      "REVEAL",
-      "DISCUSSION",
-      "COMPLETE",
-    ],
+  "INTRO",
+  "START",
+  "QUESTION_1",
+  "WAIT_1",
+  "QUESTION_2",
+  "WAIT_2",
+  "QUESTION_3",
+  "WAIT_3",
+  "REVEAL_1",
+  "REVEAL_2",
+  "REVEAL_3",
+  "DISCUSSION",
+  "COMPLETE",
+],
   },
   {
-    id: 3,
-    title: "SOCIAL INFLUENCE",
-    type: "GROUP",
+  id: 3,
+  title: "THE SUNDAY CHOICE",
+  type: "INDIVIDUAL",
+  stages: [
+    "INTRO",
+    "START",
+    "QUESTION_1",
+    "WAIT_1",
+    "REVEAL_1",
+    "QUESTION_2",
+    "WAIT_2",
+    "REVEAL_2",
+    "QUESTION_3",
+    "WAIT_3",
+    "REVEAL_3",
+    "DISCUSSION",
+    "COMPLETE",
+  ],
+},
+  {
+    id: 4,
+    title: "THE QUIET CONNECTION",
+    type: "INDIVIDUAL",
     stages: [
       "INTRO",
       "START",
@@ -117,52 +141,29 @@ const EXPERIMENTS: Experiment[] = [
       "QUESTION_2",
       "WAIT_2",
       "REVEAL_2",
+      "QUESTION_3",
+      "WAIT_3",
+      "REVEAL_3",
       "DISCUSSION",
       "COMPLETE",
     ],
   },
   {
-    id: 4,
-    title: "MEMORY",
-    type: "INDIVIDUAL",
-    stages: [
-      "INTRO",
-      "START",
-      "QUESTION",
-      "WAIT",
-      "REVEAL",
-      "DISCUSSION",
-      "COMPLETE",
-    ],
-  },
-  {
-    id: 5,
-    title: "ATTENTION",
-    type: "INDIVIDUAL",
-    stages: [
-      "INTRO",
-      "START",
-      "QUESTION",
-      "WAIT",
-      "REVEAL",
-      "DISCUSSION",
-      "COMPLETE",
-    ],
-  },
-  {
-    id: 6,
-    title: "REFLECTION",
-    type: "INDIVIDUAL",
-    stages: [
-      "INTRO",
-      "START",
-      "QUESTION",
-      "WAIT",
-      "REVEAL",
-      "DISCUSSION",
-      "COMPLETE",
-    ],
-  },
+  id: 5,
+  title: "THE LIVING CHURCH",
+  type: "INDIVIDUAL",
+  stages: [
+    "INTRO",
+    "JOURNEY",
+    "SCRIPTURE",
+    "REFLECTION",
+    "CARD",
+    "PREVIOUS_COMMITMENTS",
+    "COLLECTIVE",
+    "ONE_BODY",
+    "COMPLETE"
+  ],
+},
 ];
 
 const INITIAL_PARTICIPANTS: Participant[] = [];
@@ -303,12 +304,13 @@ const [session, setSessionState] =
 const [supabaseSession, setSupabaseSession] =
   useState<ExperimentSession | null>(null);
 const selectedExperiment = session.experiment - 1;
-const experiment = EXPERIMENTS[selectedExperiment]; 
+const experiment = EXPERIMENTS[selectedExperiment];
 const [selectedParticipant, setSelectedParticipant] =
   useState<Participant | null>(null);
 const stageIndex = experiment.stages.findIndex(
-  (item) => item === session.stage
+  (item) => item === supabaseSession?.current_stage
 );
+
   const [participants, setParticipants] = useState(INITIAL_PARTICIPANTS);
   const [pendingGroups, setPendingGroups] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -594,7 +596,12 @@ const [revealBibleResults, setRevealBibleResults] = useState(false);
   }
  async function selectExperiment(index: number) {
   if (!supabaseSession) return;
-
+console.log("STAGE TRANSITION:", {
+  currentStage: supabaseSession.current_stage,
+  stageIndex,
+  stages: experiment.stages,
+  nextStage,
+});
   const updated = await updateExperimentSession(
     supabaseSession.id,
     {
@@ -765,6 +772,12 @@ return (
           <div className="flex items-center gap-3">
             <div className="hidden items-center gap-2 sm:flex">
               <span className="h-2 w-2 animate-pulse rounded-full bg-[#c7542b]" />
+              <a
+  href="/admin/participants"
+  className="border border-[#19352c]/20 px-4 py-3 font-mono text-[9px] font-bold uppercase tracking-wider transition hover:bg-[#19352c] hover:text-[#f8f1e6]"
+>
+  Participant Passes →
+</a>
               <span className="font-mono text-[9px] font-bold uppercase tracking-[0.16em]">
                 LIVE
               </span>
@@ -860,7 +873,7 @@ return (
                 </div>
 
                 <p className="mt-2 font-mono text-[8px] text-[#19352c]/45">
-                  Experiment {selectedExperiment + 1} of 6
+                  Experiment {session.experiment} of 5
                 </p>
               </div>
             </div>
@@ -1135,23 +1148,16 @@ return (
                 >
                  {supabaseSession?.status === "PAUSED"
                ? "Unlock Current"
-               : "Lock Current"}  
+               : "Lock Current"}
                 </button>
-                    {String(stage).startsWith("REVEAL") && (
+                   {experiment.id === 1 && String(stage).startsWith("REVEAL") && (
   <button
-    onClick={() => {
-      if (experiment.id === 1) {
-        setRevealBibleResults(true);
-      } else if (experiment.id === 3) {
-        setRevealGroups(true);
-      }
-    }}
+    onClick={() => setRevealBibleResults(true)}
     className="bg-[#c7542b] px-4 py-3 font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-[#f8f1e6]"
   >
-    {experiment.id === 1 ? "Reveal Results" : "Trigger Reveal"}
+    Reveal Results
   </button>
 )}
-
                     {stage === "COMPLETE" && (
                       <button
                         onClick={completeExperiment}
@@ -1197,13 +1203,13 @@ return (
                       {stage === "START" &&
                         "Get everyone ready."}
 
-                      {(stage === "QUESTION" || stage === "QUESTION_1" || stage === "QUESTION_2") &&
+                      {(stage === "QUESTION" || stage === "QUESTION_1" || stage === "QUESTION_2" || stage === "QUESTION_3") &&
                         "Participants are answering."}
 
-                      {(stage === "WAIT" || stage === "WAIT_1" || stage === "WAIT_2") &&
+                      {(stage === "WAIT" || stage === "WAIT_1" || stage === "WAIT_2" || stage === "WAIT_3") &&
                         "Wait for the room."}
 
-                      {(stage === "REVEAL" || stage === "REVEAL_1" || stage === "REVEAL_2") &&
+                      {(stage === "REVEAL" || stage === "REVEAL_1" || stage === "REVEAL_2" || stage === "REVEAL_3") &&
                         "Reveal what actually happened."}
 
                       {stage === "DISCUSSION" &&
@@ -1352,8 +1358,7 @@ return (
             {/* =================================================
                 SOCIAL INFLUENCE GROUP ASSIGNMENT
             ================================================== */}
-
-            {experiment.id === 3 && (
+              {experiment.id === 3 && experiment.type === "GROUP" && (
               <div className="mt-7 border border-[#19352c]/10">
                 <div className="border-b border-[#19352c]/10 px-5 py-4">
                   <SectionLabel>Group Assignment</SectionLabel>
@@ -1458,7 +1463,7 @@ return (
                 </div>
               </div>
             )}
-          
+
             {/* =================================================
                 BEYOND THE HABIT - RESULTS DASHBOARD
             ================================================== */}
@@ -1585,7 +1590,7 @@ return (
                 SOCIAL INFLUENCE GROUP CONTROL
             ================================================== */}
 
-            {experiment.id === 3 && (
+            {experiment.id === 3 && experiment.type === "GROUP" && (
               <div className="mt-7 border border-[#19352c]/10">
                 <div className="flex items-center justify-between border-b border-[#19352c]/10 px-5 py-4">
                   <div>

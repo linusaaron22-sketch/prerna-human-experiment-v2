@@ -1,39 +1,17 @@
 "use client";
 
-import { useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
-
-export default function ParticipantRedirectPage() {
-  const params = useParams();
-  const router = useRouter();
-
-  const participant =
-    typeof params.participant === "string"
-      ? params.participant.toUpperCase()
-      : "";
-
-  useEffect(() => {
-    if (!participant) return;
-
-    // Remember the participant permanently on this device.
-    window.localStorage.setItem(
-      "arise-human-experiment-participant",
-      participant
-    );
-
-    // Send them to the actual Human Experiment experience.
-    router.replace(
-      `/human-experiment?participant=${encodeURIComponent(participant)}`
-    );
-  }, [participant, router]);
-
+export default function LegacyParticipantRedirectPage() {
   return (
-    <main className="min-h-screen bg-[#f8f1e6] flex items-center justify-center">
-      <div className="text-center text-[#19352c]">
-        <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-[#19352c]/20 border-t-[#19352c]" />
+    <main className="min-h-screen bg-[#f8f1e6] flex items-center justify-center px-6">
+      <div className="max-w-md text-center text-[#19352c]">
+        <h1 className="font-serif text-3xl">
+          Secure pass required
+        </h1>
 
-        <p className="text-sm font-medium tracking-[0.18em] uppercase">
-          Preparing your experiment
+        <p className="mt-4 text-sm leading-relaxed text-[#19352c]/65">
+          Participant ID links are no longer accepted.
+          Please use your personal secure Prerna pass or contact
+          the event administrator.
         </p>
       </div>
     </main>
