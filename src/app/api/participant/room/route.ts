@@ -7,15 +7,27 @@
 
   export async function POST(request: NextRequest) {
     try {
-     const origin = request.headers.get("origin");
-const requestOrigin = new URL(request.url).origin;
+    const origin = request.headers.get("origin");
+const allowedOrigin = process.env.NEXT_PUBLIC_SITE_URL;
 
-if (!origin || origin !== requestOrigin) {
+let isValidOrigin = false;
+
+try {
+  isValidOrigin =
+    !!origin &&
+    !!allowedOrigin &&
+    new URL(origin).origin === new URL(allowedOrigin).origin;
+} catch {
+  isValidOrigin = false;
+}
+
+if (!isValidOrigin) {
   return NextResponse.json(
     { error: "Invalid request origin." },
     { status: 403 }
   );
 }
+
       const participant = await getAuthenticatedParticipant();
 
       if (!participant) {
