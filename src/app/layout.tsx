@@ -1,6 +1,7 @@
 import ScrollToTop from "@/components/ScrollToTop";
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Inter, Noto_Sans_Devanagari } from "next/font/google";
+import { Cormorant_Garamond, Inter } from "next/font/google";
+import localFont from "next/font/local";
 import type { ReactNode } from "react";
 import "./globals.css";
 
@@ -11,12 +12,12 @@ const cormorant = Cormorant_Garamond({
   weight: ["500", "600", "700"],
   variable: "--font-display"
 });
-const devanagari = Noto_Sans_Devanagari({
-  subsets: ["devanagari"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-devanagari"
+const devanagari = localFont({
+  src: "../../public/fonts/NotoSansDevanagari.ttf",
+  variable: "--font-devanagari",
+  weight: "100 900",
+  display: "swap",
 });
-
 export const metadata: Metadata = {
   title: "Prerna Human Experiment",
   description:
