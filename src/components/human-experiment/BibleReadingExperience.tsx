@@ -17,7 +17,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import Image from "next/image";
-import { useHumanExperimentSession } from "@/lib/human-experiment/useHumanExperimentSession";
+import type { HumanExperimentSession } from "@/lib/human-experiment/session";
 
 type Language = "en" | "hi";
 type Round = 1 | 2;
@@ -182,10 +182,11 @@ const content = {
 
 export default function BibleReadingExperience({
   previewMode = false,
+  session,
 }: {
   previewMode?: boolean;
+  session: HumanExperimentSession;
 }) {
-  const session = useHumanExperimentSession();
   const [previewStage, setPreviewStage] =
   useState<PreviewStage>("INTRO");
 
@@ -320,7 +321,7 @@ useEffect(() => {
       }
     } catch (err) {
       console.error("EXPERIENCE 01 ANSWER SAVE FAILED:", err);
-      setError(t.saveError);
+      setError(err instanceof Error ? err.message : t.saveError);
     } finally {
       setSaving(false);
     }

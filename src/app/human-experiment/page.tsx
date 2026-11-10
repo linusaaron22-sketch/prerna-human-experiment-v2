@@ -586,7 +586,7 @@ if (!savedRoomCode) return;
 
   switch (session.experiment) {
     case 1:
-    return <BibleReadingExperience />;
+  return <BibleReadingExperience session={session} />;
 
     case 2:
       return <CommitmentExperiment />;

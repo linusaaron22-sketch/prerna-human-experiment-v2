@@ -19,17 +19,20 @@ function jsonError(message: string, status: number) {
 }
 
 function validSameOriginRequest(request: NextRequest) {
-  const expected = process.env.NEXT_PUBLIC_SITE_URL;
-  if (!expected) return false;
+  const requestOrigin = new URL(request.url).origin;
 
   try {
-    const expectedOrigin = new URL(expected).origin;
     const origin = request.headers.get("origin");
 
-    if (origin) return new URL(origin).origin === expectedOrigin;
+    if (origin) {
+      return new URL(origin).origin === requestOrigin;
+    }
 
     const referer = request.headers.get("referer");
-    if (referer) return new URL(referer).origin === expectedOrigin;
+
+    if (referer) {
+      return new URL(referer).origin === requestOrigin;
+    }
 
     return request.headers.get("sec-fetch-site") === "same-origin";
   } catch {

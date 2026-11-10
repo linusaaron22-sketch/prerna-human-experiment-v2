@@ -7,16 +7,15 @@
 
   export async function POST(request: NextRequest) {
     try {
-      const origin = request.headers.get("origin");
-const allowedOrigin = process.env.NEXT_PUBLIC_SITE_URL;
+     const origin = request.headers.get("origin");
+const requestOrigin = new URL(request.url).origin;
 
-if (!origin || !allowedOrigin || origin !== allowedOrigin) {
+if (!origin || origin !== requestOrigin) {
   return NextResponse.json(
     { error: "Invalid request origin." },
     { status: 403 }
   );
 }
-
       const participant = await getAuthenticatedParticipant();
 
       if (!participant) {
