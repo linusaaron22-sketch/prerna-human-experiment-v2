@@ -594,8 +594,52 @@ export default function CommitmentExperiment({
 
       setAnswers((previous) => ({ ...previous, ...patch }));
       return true;
-    } catch (err) {
+        } catch (err) {
       console.error("CHURCH ATTENDANCE ANSWER SAVE FAILED:", err);
+
+      // The write may have reached the database even if its response failed.
+      // Verify the stored answer before showing a failure message.
+      try {
+        const {
+          data: verified,
+          error: verificationError,
+        } = await client
+          .from("experiment_participants")
+          .select("answer, status")
+          .eq("session_id", session.sessionId)
+          .eq("participant_key", participantKey)
+          .maybeSingle();
+
+        if (verificationError) {
+          console.error("ANSWER SAVE VERIFICATION FAILED:", verificationError);
+        }
+
+        if (!verificationError && verified) {
+          const storedAnswer = isRecord(verified.answer)
+            ? verified.answer
+            : {};
+
+          const storedExperiment = isRecord(storedAnswer.experiment2)
+            ? storedAnswer.experiment2
+            : {};
+
+          const patchIsSaved = (
+            Object.keys(patch) as (keyof SceneAnswers)[]
+          ).every((key) => storedExperiment[key] === patch[key]);
+
+          const completionIsSaved =
+            !markComplete || verified.status === "ANSWERED";
+
+          if (patchIsSaved && completionIsSaved) {
+            setAnswers((previous) => ({ ...previous, ...patch }));
+            setError("");
+            return true;
+          }
+        }
+      } catch (verificationError) {
+        console.error("ANSWER SAVE VERIFICATION ERROR:", verificationError);
+      }
+
       setError(t.saveError);
       return false;
     } finally {
