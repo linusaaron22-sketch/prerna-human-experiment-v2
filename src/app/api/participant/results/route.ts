@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getAuthenticatedParticipant } from "@/lib/human-experiment/participantAuth";
+import { validateSameOrigin } from "@/lib/security/validateSameOrigin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,31 +19,13 @@ function jsonError(message: string, status: number) {
   );
 }
 
-function validSameOriginRequest(request: NextRequest) {
-  const origin = request.headers.get("origin");
-  const allowedOrigin = process.env.NEXT_PUBLIC_SITE_URL;
 
-  try {
-    if (origin && allowedOrigin) {
-      return new URL(origin).origin === new URL(allowedOrigin).origin;
-    }
 
-    const referer = request.headers.get("referer");
-
-    if (referer && allowedOrigin) {
-      return new URL(referer).origin === new URL(allowedOrigin).origin;
-    }
-
-    return false;
-  } catch {
-    return false;
-  }
-}
 
 export async function GET(request: NextRequest) {
   try {
-    if (!validSameOriginRequest(request)) {
-      return jsonError("Invalid request origin.", 403);
+if (!validateSameOrigin(request, false)) {
+    return jsonError("Invalid request origin.", 403);
     }
 
     const participant = await getAuthenticatedParticipant();

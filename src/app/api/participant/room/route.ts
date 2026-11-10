@@ -1,33 +1,20 @@
   import { NextRequest, NextResponse } from "next/server";
   import { supabaseAdmin } from "@/lib/supabase/admin";
   import { getAuthenticatedParticipant } from "@/lib/human-experiment/participantAuth";
+  import { validateSameOrigin } from "@/lib/security/validateSameOrigin";
 
   export const runtime = "nodejs";
   export const dynamic = "force-dynamic";
 
   export async function POST(request: NextRequest) {
     try {
-    const origin = request.headers.get("origin");
-const allowedOrigin = process.env.NEXT_PUBLIC_SITE_URL;
 
-let isValidOrigin = false;
-
-try {
-  isValidOrigin =
-    !!origin &&
-    !!allowedOrigin &&
-    new URL(origin).origin === new URL(allowedOrigin).origin;
-} catch {
-  isValidOrigin = false;
-}
-
-if (!isValidOrigin) {
+if (!validateSameOrigin(request, true)) {
   return NextResponse.json(
     { error: "Invalid request origin." },
     { status: 403 }
   );
 }
-
       const participant = await getAuthenticatedParticipant();
 
       if (!participant) {

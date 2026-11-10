@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getAuthenticatedParticipant } from "@/lib/human-experiment/participantAuth";
+import { validateSameOrigin } from "@/lib/security/validateSameOrigin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,31 +27,6 @@ function jsonError(message: string, status: number) {
 // All requests must target the configured site.
 // POST requires Origin. GET can also be verified using the request URL
 // because browsers may omit Origin on same-origin GET requests.
-function validOrigin(request: NextRequest, requireOrigin: boolean) {
-  const expected = process.env.NEXT_PUBLIC_SITE_URL;
-  if (!expected) return false;
-
-  try {
-    const requestOrigin = request.nextUrl.origin;
-    const expectedOrigin = new URL(expected).origin;
-    const isLocal =
-      ["localhost", "127.0.0.1"].includes(request.nextUrl.hostname);
-
-    if (requestOrigin !== expectedOrigin && !isLocal) return false;
-
-    const origin = request.headers.get("origin");
-    if (origin) return new URL(origin).origin === requestOrigin;
-
-    if (requireOrigin) return false;
-
-    const referer = request.headers.get("referer");
-    if (referer) return new URL(referer).origin === requestOrigin;
-
-    return request.headers.get("sec-fetch-site") === "same-origin";
-  } catch {
-    return false;
-  }
-}
 
 function parseExperience(value: string | null): Experience | null {
   if (!value) return null;
@@ -222,7 +198,7 @@ async function getParticipantRow(
 
 export async function GET(request: NextRequest) {
   try {
-    if (!validOrigin(request, false)) {
+    if (!validateSameOrigin(request, false)) {
       return jsonError("Invalid request origin.", 403);
     }
 
@@ -278,8 +254,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    if (!validOrigin(request, true)) {
-      return jsonError("Invalid request origin.", 403);
+  if (!validateSameOrigin(request, true)) {
+    return jsonError("Invalid request origin.", 403);
     }
 
     const participant = await getAuthenticatedParticipant();

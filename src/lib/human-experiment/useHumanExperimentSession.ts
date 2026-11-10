@@ -2,77 +2,65 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
 import {
   DEFAULT_SESSION,
   type HumanExperimentSession,
 } from "@/lib/human-experiment/session";
+import {
+  getExperimentSession,
+  subscribeToExperimentSession,
+} from "@/lib/human-experiment/supabaseSession";
 
 export function useHumanExperimentSession() {
   const [session, setSession] =
     useState<HumanExperimentSession>(DEFAULT_SESSION);
 
   useEffect(() => {
-    const roomCode = window.localStorage.getItem(
-      "arise-human-experiment-room"
-    );
-
-    if (!roomCode) return;
-
     let cancelled = false;
-    let loading = false;
+    let cleanup: (() => void) | undefined;
 
     async function loadLiveSession() {
-      if (cancelled || loading) return;
+      const roomCode = window.localStorage.getItem(
+        "arise-human-experiment-room"
+      );
 
-      loading = true;
+      if (!roomCode) return;
 
-      try {
-        const response = await fetch(
-          `/api/participant/session?roomCode=${encodeURIComponent(roomCode!)}`,
-          {
-            method: "GET",
-            credentials: "same-origin",
-            cache: "no-store",
-          }
-        );
+      const liveSession = await getExperimentSession(roomCode);
 
-        if (!response.ok || cancelled) return;
+      if (!liveSession || cancelled) return;
 
-        const result = await response.json();
+      const convertSession = (
+        current: typeof liveSession
+      ): HumanExperimentSession => ({
+        experiment: current.current_experiment,
+        stage: current.current_stage,
+        timerStartedAt: current.timer_started_at
+          ? new Date(current.timer_started_at).getTime()
+          : null,
+        timerDuration: current.timer_duration,
+        reveal: current.reveal,
+        status: current.status,
+        sessionId: current.id,
+        roomCode: current.room_code,
+      });
 
-        if (cancelled || !result.success || !result.session) return;
+      setSession(convertSession(liveSession));
 
-        const liveSession = result.session;
-
-        setSession({
-          experiment: liveSession.current_experiment,
-          stage: liveSession.current_stage,
-          timerStartedAt: liveSession.timer_started_at
-            ? new Date(liveSession.timer_started_at).getTime()
-            : null,
-          timerDuration: liveSession.timer_duration,
-          reveal: liveSession.reveal,
-          status: liveSession.status,
-          sessionId: liveSession.id,
-          roomCode: liveSession.room_code,
-        });
-      } catch (error) {
-        console.error("PARTICIPANT SESSION POLLING FAILED:", error);
-      } finally {
-        loading = false;
-      }
+      cleanup = subscribeToExperimentSession(
+        liveSession.id,
+        (updatedSession) => {
+          if (cancelled) return;
+          setSession(convertSession(updatedSession));
+        }
+      );
     }
 
     void loadLiveSession();
 
-    const intervalId = window.setInterval(() => {
-      void loadLiveSession();
-    }, 2000);
-
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
+      cleanup?.();
     };
   }, []);
 

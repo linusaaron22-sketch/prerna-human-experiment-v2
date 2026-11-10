@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getAuthenticatedParticipant } from "@/lib/human-experiment/participantAuth";
+import { validateSameOrigin } from "@/lib/security/validateSameOrigin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,10 +9,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     // Require a same-origin request.
-const origin = request.headers.get("origin");
-const requestOrigin = new URL(request.url).origin;
-
-if (!origin || origin !== requestOrigin) {
+if (!validateSameOrigin(request, true)) {
   return NextResponse.json(
     { error: "Invalid request origin." },
     { status: 403 }
