@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
-  BookOpen, 
+  BookOpen,
   Check,
   BriefcaseBusiness,
   CalendarDays,
@@ -19,7 +19,7 @@ import {
   Sun,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useHumanExperimentSession } from "@/lib/human-experiment/useHumanExperimentSession";
+import type { HumanExperimentSession } from "@/lib/human-experiment/session";
 import { supabase } from "@/lib/supabase";
 
 type Language = "en" | "hi";
@@ -275,8 +275,11 @@ const LABELS: Record<SceneKey, string[]> = {
   scene3: [...OPTIONS.scene3],
 };
 
-export default function WorkingOnSundaysExperiment() {
-  const session = useHumanExperimentSession();
+export default function WorkingOnSundaysExperiment({
+  session,
+}: {
+  session: HumanExperimentSession;
+}) {
   const [language, setLanguage] = useState<Language>("en");
   const [participantKey, setParticipantKey] = useState("");
   const [answers, setAnswers] = useState<Answers>(EMPTY);
@@ -711,8 +714,8 @@ export default function WorkingOnSundaysExperiment() {
                       <span className="font-mono text-[8px] uppercase tracking-[0.2em] text-[#bd5939]">{language === "en" ? "THREE MOMENTS" : "तीन परिस्थितियाँ"}</span>
                     </motion.div>
                   </motion.div>
-                
-               
+
+
                 </div>
               </motion.section>
             )}
@@ -766,7 +769,7 @@ export default function WorkingOnSundaysExperiment() {
   {scene.body}
 </motion.p>
                   </div>
-                  
+
                 {/* CINEMATIC SCENE VISUALS */}
                 {currentSceneIndex === 0 && (
                   <motion.div

@@ -6,7 +6,7 @@ import {
   MessageCircle, HandHeart, Sprout, Users, ShieldCheck,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useHumanExperimentSession } from "@/lib/human-experiment/useHumanExperimentSession";
+import type { HumanExperimentSession } from "@/lib/human-experiment/session";
 import { supabase } from "@/lib/supabase";
 
 type Language = "en" | "hi";
@@ -132,8 +132,11 @@ function BotanicalMark({ className = "" }: { className?: string }) {
   return <svg aria-hidden="true" viewBox="0 0 180 220" fill="none" className={className}><g stroke="#829681" strokeWidth="1.4" opacity=".65"><path d="M18 205C50 151 86 99 154 18"/><path d="M43 164C17 158 8 139 16 120c22 4 34 20 27 44Z"/><path d="M70 127c-3-24 10-40 31-43 4 22-8 38-31 43Z"/><path d="M99 91c-20-9-26-27-16-46 20 6 28 24 16 46Z"/><path d="M44 164c-4-18-13-32-28-44m55 7c7-16 18-29 30-43m-2 7c-1-17-2-29-16-46"/></g><circle cx="154" cy="18" r="7" stroke="#bd795c" opacity=".7"/></svg>;
 }
 
-export default function LivingChurchReflection() {
-  const session = useHumanExperimentSession();
+export default function LivingChurchReflection({
+  session,
+}: {
+  session: HumanExperimentSession;
+}) {
   const [language, setLanguage] = useState<Language>("en");
   const [participantKey, setParticipantKey] = useState("");
   const [reflection, setReflection] = useState<Reflection>(EMPTY);
@@ -911,7 +914,6 @@ ctx.fillText(
         {stage !== "COMPLETE" && <div className="mt-10 flex items-center justify-between border-t border-[#19382f]/12 pt-5"><span className="font-mono text-[12px] uppercase tracking-[.18em] text-[#8b9587]">PRERNA 2026 · ACTS 2:42</span><span className="font-mono text-[12px] uppercase tracking-[.18em] text-[#8b9587]">{stageTitles[stageNumber]}</span></div>}
       </div>
     </main>
-  );                                                                 
-          
+  );
+
 }
-     

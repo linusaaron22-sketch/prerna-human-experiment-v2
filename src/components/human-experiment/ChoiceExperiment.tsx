@@ -30,7 +30,7 @@ import {
   Users,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useHumanExperimentSession } from "@/lib/human-experiment/useHumanExperimentSession";
+import type { HumanExperimentSession } from "@/lib/human-experiment/session";
 import { supabase } from "@/lib/supabase";
 
 type Language = "en" | "hi";
@@ -472,9 +472,11 @@ function ResultBars({
     </div>
   );
 }
-
-export default function CommitmentExperiment() {
-  const session = useHumanExperimentSession();
+export default function CommitmentExperiment({
+  session,
+}: {
+  session: HumanExperimentSession;
+}) {
   const [language, setLanguage] = useState<Language>("en");
   const [participantKey, setParticipantKey] = useState("");
   const [answers, setAnswers] = useState<SceneAnswers>(EMPTY_ANSWERS);

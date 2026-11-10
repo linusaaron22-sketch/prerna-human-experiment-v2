@@ -589,18 +589,18 @@ if (!savedRoomCode) return;
   return <BibleReadingExperience session={session} />;
 
     case 2:
-      return <CommitmentExperiment />;
+      return <CommitmentExperiment session={session} />;
 
-      case 3:
-    return <WorkingOnSundaysExperiment />;
+    case 3:
+  return <WorkingOnSundaysExperiment session={session} />;
 
     case 4:
-      return <PersonalPrayerExperience />;
+      return <PersonalPrayerExperience session={session} />;
 
     case 5:
-      return <LivingChurchReflection />;
+      return <LivingChurchReflection session={session} />;
 
     default:
-      return <LivingChurchReflection />;
+      return <LivingChurchReflection session={session} />;
   }
 }

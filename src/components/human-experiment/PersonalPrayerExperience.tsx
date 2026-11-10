@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
-import { useHumanExperimentSession } from "@/lib/human-experiment/useHumanExperimentSession";
+import type { HumanExperimentSession } from "@/lib/human-experiment/session";
 import { supabase } from "@/lib/supabase";
 
 type Language = "en" | "hi";
@@ -335,7 +335,7 @@ function PrayerArtwork({ sceneIndex = -1, compact = false, hideLabel = false }: 
             <path d="M285 413v43m-91-23 77-3m-77 14 77-3m27-11 82-3m-82 14 82-3" stroke="#b4a995" strokeWidth="1.8" />
             <motion.path d="M170 145c18-16 35-16 52 0" stroke="#bd795c" strokeWidth="2" fill="none" strokeLinecap="round" initial={{ opacity: .2 }} animate={{ opacity: [.2, .8, .2], y: [0, -4, 0] }} transition={{ duration: 4, repeat: Infinity }} />
           </>
-        
+
         ) : (
           <>
             {/* An open Bible and journal; a sprout grows toward the light */}
@@ -384,8 +384,11 @@ function ScriptureMotif({ index }: { index: number }) {
   );
 }
 
-export default function PersonalPrayerExperience() {
-  const session = useHumanExperimentSession();
+export default function PersonalPrayerExperience({
+  session,
+}: {
+  session: HumanExperimentSession;
+}) {
   const [language, setLanguage] = useState<Language>("en");
   const [participantKey, setParticipantKey] = useState("");
   const [answers, setAnswers] = useState<Answers>(EMPTY);
