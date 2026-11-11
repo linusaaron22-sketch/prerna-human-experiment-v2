@@ -1,7 +1,5 @@
 "use client";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
-
 /**
  * Mobile-safe answer saving.
  *
@@ -145,56 +143,56 @@ export async function saveParticipantAnswer(options: {
   return { ok: false, message: lastMessage };
 }
 
-/**
- * For components that still write directly with the browser Supabase client:
- * after a failed save, read the row back and check whether the patch landed.
- */
-export async function verifySupabasePatch(options: {
-  client: SupabaseClient;
-  sessionId: string;
-  participantKey: string;
-  experimentKey: string;
-  patch: Record<string, unknown>;
-  nestedKey?: string;
-  markComplete?: boolean;
-}): Promise<boolean> {
-  const {
-    client,
+/** Load this participant's own saved answer for one experience. */
+export async function loadParticipantAnswer(
+  sessionId: string,
+  experience: 1 | 2 | 3 | 4 | 5
+): Promise<{
+  answer: Record<string, unknown>;
+  journey: Record<string, unknown>;
+}> {
+  const params = new URLSearchParams({
     sessionId,
-    participantKey,
-    experimentKey,
-    patch,
-    nestedKey,
-    markComplete = false,
-  } = options;
+    experience: String(experience),
+  });
+  const { status, body } = await fetchJson(
+    `/api/participant/answers?${params}`,
+    { method: "GET" }
+  );
 
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const { data, error } = await client
-        .from("experiment_participants")
-        .select("answer, status")
-        .eq("session_id", sessionId)
-        .eq("participant_key", participantKey)
-        .maybeSingle();
-
-      if (error) throw error;
-      if (!data) return false;
-
-      const answer = isRecord(data.answer) ? data.answer : {};
-      const experiment = isRecord(answer[experimentKey])
-        ? answer[experimentKey]
-        : {};
-      const stored = nestedKey ? experiment[nestedKey] : experiment;
-
-      return (
-        patchIsStored(stored, patch) &&
-        (!markComplete || data.status === "ANSWERED")
-      );
-    } catch (error) {
-      console.warn("Answer save verification failed:", error);
-      if (attempt === 0) await wait(RETRY_DELAY_MS);
-    }
+  if (status !== 200 || body?.success !== true) {
+    throw new Error(
+      typeof body?.error === "string" ? body.error : "Could not load answers."
+    );
   }
 
-  return false;
+  return {
+    answer: isRecord(body.answer) ? body.answer : {},
+    journey: isRecord(body.journey) ? body.journey : {},
+  };
+}
+
+/** Load anonymous room counts for a facilitator-led reveal. */
+export async function loadRoomResults(
+  sessionId: string,
+  experience: 1 | 2 | 3 | 4,
+  round: number
+): Promise<Record<string, unknown>> {
+  const params = new URLSearchParams({
+    sessionId,
+    experience: String(experience),
+    round: String(round),
+  });
+  const { status, body } = await fetchJson(
+    `/api/participant/results?${params}`,
+    { method: "GET" }
+  );
+
+  if (status !== 200 || body?.success !== true || !isRecord(body.counts)) {
+    throw new Error(
+      typeof body?.error === "string" ? body.error : "Could not load results."
+    );
+  }
+
+  return body.counts;
 }
