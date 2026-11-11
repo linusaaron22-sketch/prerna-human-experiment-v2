@@ -21,6 +21,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import type { HumanExperimentSession } from "@/lib/human-experiment/session";
 import { supabase } from "@/lib/supabase";
+import { verifySupabasePatch } from "@/lib/human-experiment/answerSaveClient";
 
 type Language = "en" | "hi";
 type SceneKey = "scene1" | "scene2" | "scene3";
@@ -383,6 +384,19 @@ export default function WorkingOnSundaysExperiment({
       return true;
     } catch (err) {
       console.error("SUNDAY CHOICE SAVE FAILED:", err);
+      // The write may have committed even though the response was lost.
+      const stored = await verifySupabasePatch({
+        client: supabase,
+        sessionId: session.sessionId,
+        participantKey,
+        experimentKey: "experiment3",
+        patch,
+        markComplete,
+      });
+      if (stored) {
+        setAnswers((current) => ({ ...current, ...patch }));
+        return true;
+      }
       setError(t.error);
       return false;
     } finally {

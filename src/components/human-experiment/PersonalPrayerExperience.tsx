@@ -10,6 +10,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import type { HumanExperimentSession } from "@/lib/human-experiment/session";
 import { supabase } from "@/lib/supabase";
+import { verifySupabasePatch } from "@/lib/human-experiment/answerSaveClient";
 
 type Language = "en" | "hi";
 type SceneKey = "scene1" | "scene2" | "scene3";
@@ -443,7 +444,13 @@ export default function PersonalPrayerExperience({
       if (updateError) throw updateError;
       setAnswers((current) => ({ ...current, ...patch }));
       return true;
-    } catch (err) { console.error("PRAYER EXPERIENCE SAVE FAILED:", err); setError(t.error); return false; }
+    } catch (err) {
+      console.error("PRAYER EXPERIENCE SAVE FAILED:", err);
+      // The write may have committed even though the response was lost.
+      const stored = await verifySupabasePatch({ client: supabase, sessionId: session.sessionId, participantKey, experimentKey: "experiment4", patch, markComplete });
+      if (stored) { setAnswers((current) => ({ ...current, ...patch })); return true; }
+      setError(t.error); return false;
+    }
     finally { setSaving(false); }
   }
 

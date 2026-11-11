@@ -8,6 +8,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import type { HumanExperimentSession } from "@/lib/human-experiment/session";
 import { supabase } from "@/lib/supabase";
+import { verifySupabasePatch } from "@/lib/human-experiment/answerSaveClient";
 
 type Language = "en" | "hi";
 type Reflection = { restore: string; strengthen: string; nextStep: string; commitment: string };
@@ -225,7 +226,12 @@ export default function LivingChurchReflection({
       const { error: updateError } = await supabase.from("experiment_participants").update({ answer: nextAnswer, connected: true, current_experiment: 5 }).eq("session_id", session.sessionId).eq("participant_key", participantKey);
       if (updateError) throw updateError;
       setSaved(true);
-    } catch (err) { console.error("EXPERIENCE 05 PRIVATE REFLECTION SAVE FAILED:", err); setError(t.error); }
+    } catch (err) {
+      console.error("EXPERIENCE 05 PRIVATE REFLECTION SAVE FAILED:", err);
+      // The write may have committed even though the response was lost.
+      const stored = await verifySupabasePatch({ client: supabase, sessionId: session.sessionId, participantKey, experimentKey: "experiment5", nestedKey: "privateReflection", patch: { ...reflection } });
+      if (stored) setSaved(true); else setError(t.error);
+    }
     finally { setSaving(false); }
   }
 
